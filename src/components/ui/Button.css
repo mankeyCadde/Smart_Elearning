@@ -1,0 +1,46 @@
+.stitch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--rounded);
+  font-family: var(--font-family);
+  font-size: 16px;
+  font-weight: 700; /* Bold weight as specified */
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.stitch-btn:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+.stitch-btn-primary {
+  background-color: var(--color-tertiary);
+  color: var(--color-on-tertiary);
+}
+
+.stitch-btn-primary:hover {
+  background-color: var(--color-tertiary-container);
+}
+
+.stitch-btn-secondary {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.stitch-btn-secondary:hover {
+  background-color: var(--color-surface-container);
+}
+
+.stitch-btn-ghost {
+  background-color: transparent;
+  color: var(--color-secondary);
+}
+
+.stitch-btn-ghost:hover {
+  background-color: var(--color-secondary-container);
+}

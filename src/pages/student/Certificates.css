@@ -1,0 +1,178 @@
+.certificates-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.certificates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.certificate-card {
+  padding: 0 !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.certificate-card-thumb {
+  height: 180px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.thumb-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.certificate-card-content {
+  padding: var(--spacing-lg);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Certificate Preview (HTML/CSS paper mimic) */
+.preview-container {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xxxl) !important;
+  background-color: var(--color-surface-container-low);
+  overflow-x: auto;
+}
+
+.paper-certificate {
+  width: 800px; /* Fixed width for aspect ratio */
+  min-width: 800px;
+  height: 565px; /* roughly A4 landscape ratio */
+  background-color: white;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  position: relative;
+  /* Add subtle paper texture if desired, simple gradient for now */
+  background-image: linear-gradient(to bottom right, #ffffff, #fcfcfc);
+}
+
+.cert-border-inner {
+  border: 12px double #1e3a8a; /* Deep blue professional border */
+  height: 100%;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+}
+
+.cert-header {
+  margin-bottom: 40px;
+}
+
+.cert-logo {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.cert-title {
+  font-size: 42px;
+  font-family: 'Georgia', serif;
+  color: #0f172a;
+  margin-bottom: 16px;
+}
+
+.cert-subtitle {
+  font-size: 18px;
+  color: #475569;
+  font-style: italic;
+  font-family: 'Georgia', serif;
+}
+
+.cert-body {
+  margin-bottom: auto; /* pushes footer down */
+}
+
+.cert-student-name {
+  font-size: 48px;
+  font-family: 'Great Vibes', cursive, 'Georgia', serif; /* Fallback to serif if cursive font not loaded */
+  color: #2563eb;
+  margin: 20px 0;
+  border-bottom: 1px solid #cbd5e1;
+  padding-bottom: 8px;
+  display: inline-block;
+  min-width: 400px;
+}
+
+.cert-text {
+  font-size: 18px;
+  color: #475569;
+  margin-bottom: 16px;
+}
+
+.cert-course-name {
+  font-size: 28px;
+  font-family: 'Georgia', serif;
+  color: #0f172a;
+  font-weight: bold;
+}
+
+.cert-footer {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 40px;
+}
+
+.signature-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 250px;
+}
+
+.signature-font {
+  font-family: 'Caveat', cursive, 'Georgia', serif;
+  font-size: 32px;
+  color: #0f172a;
+  margin-bottom: -5px;
+}
+
+.signature-line {
+  width: 100%;
+  height: 1px;
+  background-color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.signature-label {
+  font-size: 14px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cert-meta-block {
+  text-align: right;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+/* Responsive adjustment for preview container */
+@media (max-width: 900px) {
+  .preview-container {
+    justify-content: flex-start; /* allows scrolling left to right on small screens */
+    padding: var(--spacing-lg) !important;
+  }
+}

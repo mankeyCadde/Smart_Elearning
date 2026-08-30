@@ -1,0 +1,115 @@
+.course-editor-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.curriculum-builder {
+  max-width: 900px;
+}
+
+.sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.section-card {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface-container-low);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.section-title-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-on-surface);
+  border-bottom: 1px solid transparent;
+}
+
+.section-title-input:focus {
+  border-bottom-color: var(--color-primary);
+}
+
+.lessons-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-surface-container-lowest);
+}
+
+.lesson-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm);
+  background-color: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--rounded-md);
+  transition: border-color 0.2s ease;
+}
+
+.lesson-item:hover {
+  border-color: var(--color-outline);
+}
+
+.lesson-form-grid {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.lesson-title-field {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.lesson-video-field {
+  flex: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  background-color: var(--color-surface-container-low);
+  padding: 4px 8px;
+  border-radius: var(--rounded-sm);
+  border: 1px solid var(--color-outline-variant);
+}
+
+.lesson-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-on-surface);
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+  }
+  
+  .lesson-form-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .lesson-duration-field input {
+    width: 100% !important;
+    text-align: left !important;
+  }
+}

@@ -1,0 +1,111 @@
+.reports-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border-radius: var(--rounded-md);
+  border: 1px solid var(--color-outline);
+  background-color: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  font-family: inherit;
+  outline: none;
+  min-width: 150px;
+}
+
+.reports-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-lg);
+}
+
+.stat-box {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl) !important;
+}
+
+.stat-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Custom CSS Bar Chart */
+.css-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 250px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.chart-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  width: 12%;
+}
+
+.chart-value {
+  color: var(--color-on-surface-variant);
+  margin-bottom: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.chart-bar-container:hover .chart-value {
+  opacity: 1;
+}
+
+.chart-bar-track {
+  width: 100%;
+  flex: 1;
+  background-color: var(--color-surface-container-low);
+  border-radius: var(--rounded-md) var(--rounded-md) 0 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.chart-bar-fill {
+  width: 100%;
+  background-color: var(--color-primary);
+  border-radius: var(--rounded-md) var(--rounded-md) 0 0;
+  transition: height 0.5s ease-out;
+}
+
+.chart-bar-container:hover .chart-bar-fill {
+  background-color: var(--color-secondary);
+}
+
+.chart-label {
+  margin-top: 12px;
+  color: var(--color-on-surface-variant);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .reports-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .reports-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

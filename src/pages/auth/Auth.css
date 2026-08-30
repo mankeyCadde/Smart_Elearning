@@ -1,0 +1,75 @@
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 64px - 200px); /* Adjusting for navbar and footer roughly */
+  padding: var(--spacing-xl) var(--spacing-md);
+  background-color: var(--color-background);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  padding: var(--spacing-xxl) !important;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.auth-title {
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-on-surface);
+}
+
+.auth-subtitle {
+  color: var(--color-on-surface-variant);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.auth-link:hover {
+  color: var(--color-secondary);
+}
+
+.auth-submit-btn {
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+}
+
+.auth-footer {
+  text-align: center;
+  color: var(--color-on-surface-variant);
+}
+
+.auth-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  color: var(--color-on-surface-variant);
+}
+
+.auth-success-state {
+  text-align: center;
+  padding: var(--spacing-xl) 0;
+}

@@ -1,0 +1,248 @@
+.course-details-page {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background);
+}
+
+/* Dark Hero Section */
+.course-hero {
+  background-color: var(--color-primary); /* Deep Academic Blue */
+  color: var(--color-on-primary);
+  padding: 60px 0;
+}
+
+.course-hero-container {
+  display: flex;
+  align-items: center;
+}
+
+.course-hero-content {
+  max-width: 700px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.breadcrumbs {
+  color: var(--color-on-primary-container);
+  margin-bottom: var(--spacing-sm);
+}
+
+.breadcrumbs a {
+  color: var(--color-on-primary-container);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.subtitle {
+  color: var(--color-on-primary-container);
+  margin-bottom: var(--spacing-sm);
+}
+
+.course-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.rating, .students {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.course-hero-author .author-name {
+  color: var(--color-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.course-hero-updated {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--color-on-primary-container);
+}
+
+/* Two Column Layout */
+.course-main-layout {
+  display: flex;
+  gap: var(--spacing-xxl);
+  padding: 40px var(--spacing-lg) 80px;
+  position: relative;
+}
+
+.course-content-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.course-sidebar-col {
+  width: 340px;
+  flex-shrink: 0;
+}
+
+/* Sticky Enrollment Card */
+.enrollment-card {
+  position: sticky;
+  top: 100px; /* Offset from fixed navbar */
+  padding: 0 !important;
+  overflow: hidden;
+  box-shadow: 0 12px 24px rgba(0, 32, 69, 0.15) !important;
+}
+
+.enrollment-thumbnail {
+  background-color: var(--color-surface-container-high);
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-on-surface-variant);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.play-icon {
+  opacity: 0.8;
+}
+
+.enrollment-body {
+  padding: var(--spacing-xl);
+}
+
+.price-tag {
+  color: var(--color-on-surface);
+  margin-bottom: var(--spacing-md);
+}
+
+.enroll-btn {
+  width: 100%;
+}
+
+.course-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.course-features li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-on-surface-variant);
+}
+
+/* Tabs Content */
+.tab-pane-content {
+  padding-top: var(--spacing-md);
+}
+
+.list-styled {
+  padding-left: var(--spacing-xl);
+  margin-top: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.curriculum-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Lessons inside Accordion */
+.lesson-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.lesson-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.lesson-item:last-child {
+  border-bottom: none;
+}
+
+.lesson-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.lesson-title {
+  color: var(--color-on-surface);
+}
+
+.lesson-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.badge-preview {
+  background-color: var(--color-secondary-container);
+  color: var(--color-on-secondary-container);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.icon-locked {
+  color: var(--color-on-surface-variant);
+  opacity: 0.6;
+}
+
+/* Instructor Tab */
+.instructor-profile {
+  display: flex;
+  flex-direction: column;
+}
+
+.instructor-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.instructor-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Responsive */
+@media (max-width: 1023px) {
+  .course-main-layout {
+    flex-direction: column-reverse;
+  }
+  
+  .course-sidebar-col {
+    width: 100%;
+  }
+  
+  .enrollment-card {
+    position: static;
+    margin-top: -80px; /* Pull up into the hero area slightly */
+  }
+}

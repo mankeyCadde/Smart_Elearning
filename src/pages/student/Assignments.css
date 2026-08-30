@@ -1,0 +1,44 @@
+.assignments-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.assignment-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-lg) !important;
+}
+
+.assignment-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.assignment-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .assignment-card-header {
+    flex-direction: column;
+  }
+  
+  .assignment-meta {
+    margin-top: var(--spacing-sm);
+  }
+  
+  .assignment-card-actions {
+    justify-content: stretch !important;
+  }
+  
+  .assignment-card-actions button {
+    width: 100%;
+  }
+}
