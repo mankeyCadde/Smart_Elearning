@@ -35,7 +35,7 @@ export const CourseDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Enrollment State: 'idle' | 'confirm' | 'loading' | 'success' | 'enrolled'
+  // Enrollment State: 'idle' | 'loading' | 'PENDING' | 'ACCEPTED' | 'REJECTED'
   const [enrollState, setEnrollState] = useState('idle');
   const [isEnrolled, setIsEnrolled] = useState(false);
 
@@ -57,15 +57,16 @@ export const CourseDetails = () => {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Check existing enrollment for logged-in students
   useEffect(() => {
     if (!user || user.role !== 'STUDENT' || !course) return;
     let cancelled = false;
     apiFetch('/enrollments/mine/')
       .then(list => {
-        if (!cancelled && (list || []).some(e => e.courseId === Number(id))) {
-          setIsEnrolled(true);
-          setEnrollState('enrolled');
+        if (cancelled) return;
+        const e = (list || []).find(x => x.courseId === Number(id));
+        if (e) {
+          setEnrollState(e.status);
+          if (e.status === 'ACCEPTED') setIsEnrolled(true);
         }
       })
       .catch(() => {});
@@ -73,8 +74,11 @@ export const CourseDetails = () => {
   }, [user, course, id]);
 
   const handleEnrollClick = () => {
-    if (enrollState === 'enrolled' || isEnrolled) {
+    if (enrollState === 'ACCEPTED' || isEnrolled) {
       navigate(`/student/course/${course.id}/video`);
+      return;
+    }
+    if (enrollState === 'PENDING' || enrollState === 'REJECTED') {
       return;
     }
     if (!user) {
@@ -82,31 +86,18 @@ export const CourseDetails = () => {
       return;
     }
     if (user.role !== 'STUDENT') return;
-    setEnrollState('confirm');
+    requestEnrollment();
   };
 
-  const confirmEnrollment = async () => {
-    if (course.price > 0) {
-      setEnrollState('idle');
-      navigate(`/student/checkout/${course.id}`);
-      return;
-    }
+  const requestEnrollment = async () => {
     setEnrollState('loading');
     try {
-      await apiFetch('/enrollments/', { method: 'POST', body: { courseId: Number(course.id) } });
-      setEnrollState('success');
+      const result = await apiFetch('/enrollments/', { method: 'POST', body: { courseId: Number(course.id) } });
+      setEnrollState(result.status || 'PENDING');
+      alert('Your enrollment request has been sent for approval.');
     } catch (err) {
       setEnrollState('idle');
-      alert(err instanceof ApiError ? err.message : 'Enrollment failed. Please try again.');
-    }
-  };
-
-  const closeEnrollmentModal = () => {
-    if (enrollState === 'success') {
-      setEnrollState('enrolled');
-      setIsEnrolled(true);
-    } else {
-      setEnrollState('idle');
+      alert(err instanceof ApiError ? err.message : 'Enrollment request failed. Please try again.');
     }
   };
 
@@ -288,11 +279,13 @@ export const CourseDetails = () => {
             
             <div className="enrollment-body">
               <div className="price-tag headline-md">
-                {enrollState === 'enrolled' || isEnrolled
+                {enrollState === 'ACCEPTED' || isEnrolled
                   ? 'Enrolled'
-                  : course.price === 0
-                    ? 'Free'
-                    : `$${course.price}`}
+                  : enrollState === 'PENDING'
+                    ? 'Pending Approval'
+                    : enrollState === 'REJECTED'
+                      ? 'Enrollment Rejected'
+                      : 'Enrollment'}
               </div>
               
               {(user && user.role === 'INSTRUCTOR' && isOwner) ? (
@@ -301,17 +294,28 @@ export const CourseDetails = () => {
                 </Button>
               ) : (
                 <Button 
-                  variant={enrollState === 'enrolled' || isEnrolled ? 'secondary' : 'primary'} 
+                  variant={enrollState === 'ACCEPTED' || isEnrolled ? 'secondary' : 'primary'} 
                   size="lg" 
                   className="enroll-btn" 
                   onClick={handleEnrollClick}
+                  disabled={enrollState === 'PENDING' || enrollState === 'REJECTED' || enrollState === 'loading'}
                 >
-                  {enrollState === 'enrolled' || isEnrolled ? 'Continue Learning' : !user ? 'Log in to Enroll' : 'Enroll Now'}
+                  {enrollState === 'ACCEPTED' || isEnrolled 
+                    ? 'Continue Learning' 
+                    : enrollState === 'PENDING'
+                      ? 'Request Sent'
+                      : enrollState === 'REJECTED'
+                        ? 'Rejected'
+                        : enrollState === 'loading'
+                          ? 'Requesting...'
+                          : !user 
+                            ? 'Log in to Enroll' 
+                            : 'Request Enrollment'}
                 </Button>
               )}
-              {(enrollState !== 'enrolled' && !isEnrolled) && (
+              {(enrollState !== 'ACCEPTED' && !isEnrolled) && (
                 <p className="body-sm text-center" style={{ margin: 'var(--spacing-sm) 0 var(--spacing-lg)' }}>
-                  {course.price === 0 ? 'Start learning instantly, for free.' : '30-Day Money-Back Guarantee'}
+                  Enrollment requires instructor approval.
                 </p>
               )}
               
@@ -327,45 +331,7 @@ export const CourseDetails = () => {
         </div>
       </div>
 
-      {/* Enrollment Flow Modal */}
-      <Modal 
-        isOpen={['confirm', 'loading', 'success'].includes(enrollState)} 
-        onClose={closeEnrollmentModal}
-        title={enrollState === 'success' ? 'Enrollment Successful' : 'Confirm Enrollment'}
-      >
-        {enrollState === 'confirm' && (
-          <div className="enroll-confirm-view">
-            <p className="body-md" style={{ marginBottom: 'var(--spacing-lg)' }}>
-              You are about to enroll in <strong>{course.title}</strong>
-              {course.price > 0 ? <> for <strong>${course.price}</strong></> : <> — it's <strong>free</strong></>}.
-            </p>
-            <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'flex-end' }}>
-              <Button variant="ghost" onClick={closeEnrollmentModal}>Cancel</Button>
-              <Button variant="primary" onClick={confirmEnrollment}>Confirm Enrollment</Button>
-            </div>
-          </div>
-        )}
 
-        {enrollState === 'loading' && (
-          <div className="enroll-loading-view" style={{ textAlign: 'center', padding: 'var(--spacing-xl) 0' }}>
-            <div className="spinner" style={{ margin: '0 auto var(--spacing-md)', width: '40px', height: '40px', border: '4px solid var(--color-surface-container-high)', borderTop: '4px solid var(--color-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-            <p className="body-md">Enrolling you in the course...</p>
-          </div>
-        )}
-
-        {enrollState === 'success' && (
-          <div className="enroll-success-view" style={{ textAlign: 'center' }}>
-            <CheckCircle size={64} color="var(--color-primary)" style={{ margin: '0 auto var(--spacing-lg)' }} />
-            <h3 className="headline-sm" style={{ marginBottom: 'var(--spacing-sm)' }}>Welcome to the course!</h3>
-            <p className="body-md" style={{ marginBottom: 'var(--spacing-xl)' }}>
-              Your enrollment in {course.title} was successful. You can start learning immediately.
-            </p>
-            <Button variant="primary" style={{ width: '100%' }} onClick={() => navigate(`/student/course/${course.id}/video`)}>
-              Start Learning Now
-            </Button>
-          </div>
-        )}
-      </Modal>
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>

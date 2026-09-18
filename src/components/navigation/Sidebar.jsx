@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { BookOpen, Home, CheckSquare, Award, BookMarked, ClipboardList, User, X, Tag, Receipt, FileQuestion } from 'lucide-react';
+import { BookOpen, Home, CheckSquare, Award, BookMarked, ClipboardList, User, X, Tag, Receipt, FileQuestion, UserPlus } from 'lucide-react';
 import './Sidebar.css';
 
 export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
@@ -10,6 +10,7 @@ export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
         return [
           { to: '/instructor/dashboard', label: 'Dashboard', icon: Home },
           { to: '/instructor/courses', label: 'My Courses', icon: BookOpen },
+          { to: '/instructor/enrollment-requests', label: 'Enrollment Requests', icon: UserPlus },
           { to: '/instructor/quiz-builder', label: 'Quiz Builder', icon: FileQuestion },
           { to: '/instructor/assignments', label: 'Assignments', icon: CheckSquare },
           { to: '/instructor/attendance', label: 'Attendance', icon: ClipboardList },

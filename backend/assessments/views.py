@@ -550,7 +550,7 @@ class AssignmentDetailView(APIView):
         )
         if not user.is_admin and not (
             assignment.course.enrollments.filter(
-                student=user
+                student=user, status="ACCEPTED"
             ).exists()
         ) and not (
             user.is_instructor
@@ -571,7 +571,7 @@ class AssignmentDetailView(APIView):
         assignment._submissions_count = assignment.submissions.count()
         data = AssignmentListSerializer(assignment).data
         data["enrolled"] = assignment.course.enrollments.filter(
-            student=user
+            student=user, status="ACCEPTED"
         ).exists()
         return Response(data)
 
@@ -579,7 +579,7 @@ class AssignmentDetailView(APIView):
         user = request.user
         assignment = self._get_assignment(pk, user)
         if not user.is_admin and not assignment.course.enrollments.filter(
-            student=user
+            student=user, status="ACCEPTED"
         ).exists():
             raise PermissionDenied(
                 "You must be enrolled in this course."

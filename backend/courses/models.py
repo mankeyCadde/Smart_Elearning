@@ -4,7 +4,7 @@ from django.db import models
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField()
     description = models.TextField(blank=True)
     color = models.CharField(max_length=7, default="#3B82F6")
     icon = models.CharField(max_length=50, blank=True)
@@ -22,7 +22,7 @@ class Course(models.Model):
         INTERMEDIATE = "INTERMEDIATE", "Intermediate"
         ADVANCED = "ADVANCED", "Advanced"
 
-    title = models.CharField(max_length=200)
+    title = models.CharField()
     description = models.TextField()
     instructor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -55,7 +55,7 @@ class Course(models.Model):
 
 
 class Section(models.Model):
-    title = models.CharField(max_length=200)
+    title = models.CharField()
     order = models.IntegerField(default=0)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="sections")
 
@@ -74,7 +74,7 @@ class Lesson(models.Model):
         QUIZ = "QUIZ", "Quiz"
         ASSIGNMENT = "ASSIGNMENT", "Assignment"
 
-    title = models.CharField(max_length=200)
+    title = models.CharField()
     content = models.TextField(blank=True)
     type = models.CharField(max_length=20, choices=Type.choices, default=Type.TEXT)
     duration = models.IntegerField(default=0, help_text="Duration in seconds")

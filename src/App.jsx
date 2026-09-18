@@ -34,9 +34,11 @@ import { CertificateDetails as StudentCertificateDetails } from './pages/student
 import { InstructorAssignments } from './pages/instructor/InstructorAssignments';
 import { InstructorSubmissions } from './pages/instructor/InstructorSubmissions';
 import { InstructorDashboard } from './pages/instructor/InstructorDashboard';
+import { InstructorCourses } from './pages/instructor/InstructorCourses';
 import { InstructorProfile } from './pages/instructor/InstructorProfile';
 import { CourseEditor } from './pages/instructor/CourseEditor';
 import { QuizBuilder } from './pages/instructor/QuizBuilder';
+import { InstructorEnrollmentRequests } from './pages/instructor/InstructorEnrollmentRequests';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UserManagement } from './pages/admin/UserManagement';
 import { CourseManagement } from './pages/admin/CourseManagement';
@@ -104,7 +106,8 @@ function App() {
         <Route path="/instructor" element={<DashboardLayout role="INSTRUCTOR" />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<InstructorDashboard />} />
-          <Route path="courses" element={<InstructorDashboard />} />
+          <Route path="courses" element={<InstructorCourses />} />
+          <Route path="enrollment-requests" element={<InstructorEnrollmentRequests />} />
           <Route path="course/new" element={<CourseEditor />} />
           <Route path="course/:id/edit" element={<CourseEditor />} />
           <Route path="quiz-builder" element={<QuizBuilder />} />

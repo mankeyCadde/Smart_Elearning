@@ -11,6 +11,10 @@ urlpatterns = [
     path("enrollments/mine/", views.MyEnrollmentsView.as_view(), name="enrollments-mine"),
     path("enrollments/", views.EnrollView.as_view(), name="enroll"),
     path("enrollments/<int:pk>/", views.UnenrollView.as_view(), name="unenroll"),
+    # ── Instructor Enrollment Requests ───────────────────────────────────
+    path("instructor/enrollment-requests/", views.InstructorEnrollmentRequestsView.as_view(), name="instructor-enrollment-requests"),
+    path("instructor/enrollment-requests/<int:pk>/accept/", views.InstructorAcceptEnrollmentView.as_view(), name="instructor-accept-enrollment"),
+    path("instructor/enrollment-requests/<int:pk>/reject/", views.InstructorRejectEnrollmentView.as_view(), name="instructor-reject-enrollment"),
     # ── Lesson progress ──────────────────────────────────────────────────
     path("lessons/<int:lesson_id>/progress/", views.LessonProgressView.as_view(), name="lesson-progress"),
     # ── Attendance (student) ─────────────────────────────────────────────

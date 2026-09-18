@@ -1,3 +1,4 @@
+from django.db import models
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -88,8 +89,8 @@ class EnrollView(APIView):
         notify(
             request.user,
             "course",
-            "Enrollment successful",
-            f"You are now enrolled in '{course.title}'.",
+            "Enrollment request sent",
+            f"Your enrollment request for '{course.title}' has been sent for approval.",
             link=f"/course/{course.id}",
         )
         data = EnrollmentSerializer(
@@ -111,6 +112,84 @@ class UnenrollView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# ── Instructor Enrollment Requests ───────────────────────────────────────────
+
+class InstructorEnrollmentRequestsView(APIView):
+    """GET: list enrollment requests for instructor's courses."""
+    permission_classes = [IsAuthenticated, IsInstructor | IsAdmin]
+
+    def get(self, request):
+        if request.user.is_admin:
+            qs = Enrollment.objects.all()
+        else:
+            qs = Enrollment.objects.filter(course__instructor=request.user)
+        
+        qs = qs.order_by(
+            models.Case(
+                models.When(status=Enrollment.Status.PENDING, then=0),
+                default=1,
+            ),
+            "-enrolledAt"
+        ).select_related("course", "student")
+        
+        from .serializers import InstructorEnrollmentRequestSerializer
+        return Response(InstructorEnrollmentRequestSerializer(qs, many=True).data)
+
+class InstructorAcceptEnrollmentView(APIView):
+    """PATCH: accept an enrollment request."""
+    permission_classes = [IsAuthenticated, IsInstructor | IsAdmin]
+
+    def patch(self, request, pk):
+        if request.user.is_admin:
+            enrollment = get_object_or_404(Enrollment, pk=pk)
+        else:
+            enrollment = get_object_or_404(Enrollment, pk=pk, course__instructor=request.user)
+        
+        if enrollment.status != Enrollment.Status.PENDING:
+            raise ValidationError({"detail": "Only pending requests can be accepted."})
+            
+        enrollment.status = Enrollment.Status.ACCEPTED
+        enrollment.save(update_fields=["status"])
+        
+        from notifications.services import notify
+        notify(
+            enrollment.student,
+            "course",
+            "Enrollment accepted",
+            f"Your enrollment request for '{enrollment.course.title}' has been accepted.",
+            link=f"/course/{enrollment.course.id}",
+        )
+        from .serializers import InstructorEnrollmentRequestSerializer
+        return Response(InstructorEnrollmentRequestSerializer(enrollment).data)
+
+class InstructorRejectEnrollmentView(APIView):
+    """PATCH: reject an enrollment request."""
+    permission_classes = [IsAuthenticated, IsInstructor | IsAdmin]
+
+    def patch(self, request, pk):
+        if request.user.is_admin:
+            enrollment = get_object_or_404(Enrollment, pk=pk)
+        else:
+            enrollment = get_object_or_404(Enrollment, pk=pk, course__instructor=request.user)
+            
+        if enrollment.status != Enrollment.Status.PENDING:
+            raise ValidationError({"detail": "Only pending requests can be rejected."})
+            
+        enrollment.status = Enrollment.Status.REJECTED
+        enrollment.save(update_fields=["status"])
+        
+        from notifications.services import notify
+        notify(
+            enrollment.student,
+            "course",
+            "Enrollment rejected",
+            f"Your enrollment request for '{enrollment.course.title}' has been rejected.",
+            link=f"/course/{enrollment.course.id}",
+        )
+        from .serializers import InstructorEnrollmentRequestSerializer
+        return Response(InstructorEnrollmentRequestSerializer(enrollment).data)
+
+
 # ── Lesson progress ──────────────────────────────────────────────────────────
 
 
@@ -123,7 +202,7 @@ class LessonProgressView(APIView):
     def patch(self, request, lesson_id):
         lesson = get_object_or_404(Lesson, pk=lesson_id)
         enrollment = Enrollment.objects.filter(
-            student=request.user, course=lesson.section.course
+            student=request.user, course=lesson.section.course, status="ACCEPTED"
         ).first()
         if not enrollment:
             raise PermissionDenied(
@@ -165,7 +244,7 @@ class _AttendanceBaseMixin:
 
     def require_enrollment(self, request, course_id):
         course = get_object_or_404(Course, pk=course_id, published=True)
-        if not request.user.enrollments.filter(course=course).exists():
+        if not request.user.enrollments.filter(course=course, status="ACCEPTED").exists():
             raise PermissionDenied(
                 "You must be enrolled in this course to mark attendance."
             )

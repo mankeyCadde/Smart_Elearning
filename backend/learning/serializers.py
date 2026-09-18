@@ -34,6 +34,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             "price",
             "enrolledAt",
             "completedAt",
+            "status",
             "sectionsCount",
             "lessonCount",
             "completedLessonsCount",
@@ -57,6 +58,25 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 class EnrollSerializer(serializers.Serializer):
     courseId = serializers.IntegerField()
+
+
+class InstructorEnrollmentRequestSerializer(serializers.ModelSerializer):
+    courseId = serializers.IntegerField(source="course_id", read_only=True)
+    courseTitle = serializers.CharField(source="course.title", read_only=True)
+    studentName = serializers.CharField(source="student.full_name", read_only=True)
+    studentEmail = serializers.EmailField(source="student.email", read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = [
+            "id",
+            "courseId",
+            "courseTitle",
+            "studentName",
+            "studentEmail",
+            "enrolledAt",
+            "status",
+        ]
 
 
 class LessonProgressSerializer(serializers.ModelSerializer):

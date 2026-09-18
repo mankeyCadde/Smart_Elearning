@@ -103,6 +103,7 @@ export const InstructorDashboard = () => {
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
           <h2 className="title-lg">My Courses</h2>
+          <Button variant="secondary" onClick={() => navigate('/instructor/courses')} size="sm">View All</Button>
         </div>
 
         <div className="instructor-courses-list">

@@ -21,7 +21,7 @@ export const Dashboard = () => {
     let cancelled = false;
     apiFetch('/enrollments/mine/')
       .then(list => {
-        if (!cancelled) setEnrolled(list || []);
+        if (!cancelled) setEnrolled((list || []).filter(e => e.status === 'ACCEPTED'));
       })
       .catch(() => {})
       .finally(() => {

@@ -311,7 +311,7 @@ class CourseReviewsView(APIView):
                 {"detail": "Authentication required to leave a review."}
             )
         course = get_object_or_404(Course, pk=course_id, published=True)
-        if not request.user.enrollments.filter(course=course).exists():
+        if not request.user.enrollments.filter(course=course, status="ACCEPTED").exists():
             raise PermissionDenied(
                 "You must be enrolled in this course to review it."
             )
