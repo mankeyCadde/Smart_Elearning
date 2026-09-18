@@ -1,48 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Filter, TrendingUp, Users, CheckCircle, Target } from 'lucide-react';
+import { ChevronLeft, TrendingUp, Users, BookOpen, DollarSign } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Table } from '../../components/ui/Table';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { apiFetch } from '../../services/api';
 import './Reports.css';
-
-const MOCK_KPI = {
-  enrollments: 4520,
-  completionRate: 68,
-  avgAttendance: 85,
-  avgQuizScore: 92
-};
-
-const CHART_DATA = [
-  { month: 'Jun', value: 350 },
-  { month: 'Jul', value: 420 },
-  { month: 'Aug', value: 580 },
-  { month: 'Sep', value: 510 },
-  { month: 'Oct', value: 650 },
-  { month: 'Nov', value: 890 }
-];
-
-const MOCK_COURSE_PERFORMANCE = [
-  { id: 'c1', course: 'Advanced Data Science', enrollments: 1250, completion: 75, avgScore: 94, attendance: '88%' },
-  { id: 'c2', course: 'UX/UI Principles', enrollments: 890, completion: 82, avgScore: 89, attendance: '92%' },
-  { id: 'c3', course: 'Intro to React', enrollments: 1540, completion: 61, avgScore: 85, attendance: '79%' },
-  { id: 'c4', course: 'Machine Learning 101', enrollments: 840, completion: 55, avgScore: 96, attendance: '81%' },
-];
 
 export const ReportsDashboard = () => {
   const navigate = useNavigate();
-  const [dateFilter, setDateFilter] = useState('Last 6 Months');
-  const [courseFilter, setCourseFilter] = useState('All Courses');
+  const [data, setData] = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [courseFilter, setCourseFilter] = useState('all');
 
-  const maxValue = Math.max(...CHART_DATA.map(d => d.value));
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiFetch('/analytics/admin/dashboard/').catch(() => null),
+      apiFetch('/admin/courses/').catch(() => []),
+    ])
+      .then(([d, list]) => {
+        if (cancelled) return;
+        setData(d);
+        setCourses(list || []);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return <div className="reports-page p-xl"><p className="body-md">Loading reports...</p></div>;
+  }
+
+  const categories = data?.categories || [];
+  const maxCatEnroll = categories.reduce((m, c) => Math.max(m, c.enrollments || 0), 0);
+  const topCourses = [...courses]
+    .sort((a, b) => (b.enrolledStudents || 0) - (a.enrolledStudents || 0))
+    .slice(0, 5);
+  const maxEnroll = topCourses.reduce((m, c) => Math.max(m, c.enrolledStudents || 0), 0);
+
+  const filtered = courseFilter === 'all' ? courses : courses.filter(c => String(c.category || '') === courseFilter);
 
   const columns = [
-    { header: 'Course Name', field: 'course', render: (row) => <strong>{row.course}</strong> },
-    { header: 'Total Enrollments', field: 'enrollments', render: (row) => row.enrollments.toLocaleString() },
-    { header: 'Completion Rate', field: 'completion', render: (row) => `${row.completion}%` },
-    { header: 'Avg. Quiz Score', field: 'avgScore', render: (row) => `${row.avgScore}%` },
-    { header: 'Avg. Attendance', field: 'attendance' }
+    { header: 'Course Name', field: 'title', render: (row) => <strong>{row.title}</strong> },
+    { header: 'Instructor', field: 'instructorName' },
+    {
+      header: 'Enrollments',
+      field: 'enrolledStudents',
+      render: (row) => (row.enrolledStudents || 0).toLocaleString()
+    },
+    {
+      header: 'Price',
+      field: 'price',
+      render: (row) => `$${Number(row.price || 0).toLocaleString()}`
+    },
+    {
+      header: 'Rating',
+      field: 'rating',
+      render: (row) => `${Number(row.rating || 0).toFixed(1)} (${row.reviews || 0})`
+    },
+    {
+      header: 'Status',
+      field: 'published',
+      render: (row) => row.published ? 'Published' : 'Draft'
+    }
   ];
 
   return (
@@ -58,47 +81,36 @@ export const ReportsDashboard = () => {
             Track platform performance and student engagement.
           </p>
         </div>
-        
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-          <select 
-            className="filter-select"
-            value={courseFilter}
-            onChange={(e) => setCourseFilter(e.target.value)}
-          >
-            <option value="All Courses">All Courses</option>
-            <option value="Data Science">Data Science Category</option>
-            <option value="Design">Design Category</option>
-          </select>
-          <select 
-            className="filter-select"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-          >
-            <option value="Last 30 Days">Last 30 Days</option>
-            <option value="Last 6 Months">Last 6 Months</option>
-            <option value="This Year">This Year</option>
-          </select>
-        </div>
+
+        <select
+          className="filter-select"
+          value={courseFilter}
+          onChange={(e) => setCourseFilter(e.target.value)}
+        >
+          <option value="all">All Courses</option>
+          {categories.map(c => (
+            <option key={c.category} value={c.category}>{c.category}</option>
+          ))}
+        </select>
       </div>
 
-      {/* KPI Stats */}
       <div className="reports-stats-grid">
         <Card className="stat-box">
           <div className="stat-icon-wrapper" style={{ backgroundColor: '#DBEAFE', color: '#2563EB' }}>
             <Users size={24} />
           </div>
           <div>
-            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Enrollments</p>
-            <h3 className="headline-lg">{MOCK_KPI.enrollments.toLocaleString()}</h3>
+            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Students</p>
+            <h3 className="headline-lg">{(data?.users?.total || 0).toLocaleString()}</h3>
           </div>
         </Card>
         <Card className="stat-box">
           <div className="stat-icon-wrapper" style={{ backgroundColor: '#D1FAE5', color: '#059669' }}>
-            <CheckCircle size={24} />
+            <BookOpen size={24} />
           </div>
           <div>
-            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Avg. Completion Rate</p>
-            <h3 className="headline-lg">{MOCK_KPI.completionRate}%</h3>
+            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Enrollments</p>
+            <h3 className="headline-lg">{(data?.enrollments?.total || 0).toLocaleString()}</h3>
           </div>
         </Card>
         <Card className="stat-box">
@@ -106,65 +118,71 @@ export const ReportsDashboard = () => {
             <TrendingUp size={24} />
           </div>
           <div>
-            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Avg. Attendance</p>
-            <h3 className="headline-lg">{MOCK_KPI.avgAttendance}%</h3>
+            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Quizzes Taken</p>
+            <h3 className="headline-lg">{(data?.assessments?.submissions || 0).toLocaleString()}</h3>
           </div>
         </Card>
         <Card className="stat-box">
           <div className="stat-icon-wrapper" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>
-            <Target size={24} />
+            <DollarSign size={24} />
           </div>
           <div>
-            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Avg. Quiz Score</p>
-            <h3 className="headline-lg">{MOCK_KPI.avgQuizScore}%</h3>
+            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Revenue</p>
+            <h3 className="headline-lg">${Number(data?.enrollments?.revenue || 0).toLocaleString()}</h3>
           </div>
         </Card>
       </div>
 
       <div className="charts-grid" style={{ marginTop: 'var(--spacing-xxl)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--spacing-xl)' }}>
-        
-        {/* Enrollment Bar Chart (CSS-Based) */}
+
+        {/* Category Engagement Bar Chart */}
         <Card className="p-xl">
-          <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-xl)' }}>Enrollment Trends</h2>
-          <div className="css-bar-chart">
-            {CHART_DATA.map((data, index) => {
-              const heightPercent = (data.value / maxValue) * 100;
-              return (
-                <div key={index} className="chart-bar-container">
-                  <span className="chart-value label-sm">{data.value}</span>
-                  <div className="chart-bar-track">
-                    <div className="chart-bar-fill" style={{ height: `${heightPercent}%` }}></div>
+          <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-xl)' }}>Enrollment by Category</h2>
+          {categories.length === 0 ? (
+            <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>No category data yet.</p>
+          ) : (
+            <div className="css-bar-chart">
+              {categories.map((c, index) => {
+                const heightPercent = maxCatEnroll ? (c.enrollments / maxCatEnroll) * 100 : 0;
+                return (
+                  <div key={index} className="chart-bar-container">
+                    <span className="chart-value label-sm">{c.enrollments}</span>
+                    <div className="chart-bar-track">
+                      <div className="chart-bar-fill" style={{ height: `${heightPercent}%` }}></div>
+                    </div>
+                    <span className="chart-label label-sm">{c.category}</span>
                   </div>
-                  <span className="chart-label label-sm">{data.month}</span>
-                </div>
-              )
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
 
-        {/* Course Completion Progress */}
+        {/* Top Courses by Enrollments */}
         <Card className="p-xl">
-          <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>Top Courses by Completion</h2>
+          <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>Top Courses by Enrollments</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-            {MOCK_COURSE_PERFORMANCE.map(course => (
-              <div key={course.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span className="label-md">{course.course}</span>
-                  <span className="label-md" style={{ color: 'var(--color-primary)' }}>{course.completion}%</span>
+            {topCourses.length === 0 ? (
+              <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>No courses yet.</p>
+            ) : (
+              topCourses.map(course => (
+                <div key={course.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span className="label-md">{course.title}</span>
+                    <span className="label-md" style={{ color: 'var(--color-primary)' }}>{course.enrolledStudents || 0}</span>
+                  </div>
+                  <ProgressBar progress={maxEnroll ? Math.round(((course.enrolledStudents || 0) / maxEnroll) * 100) : 0} />
                 </div>
-                <ProgressBar progress={course.completion} />
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>
 
-      {/* Detailed Data Table */}
       <section style={{ marginTop: 'var(--spacing-xxl)' }}>
         <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>Detailed Course Performance</h2>
-        <Table columns={columns} data={MOCK_COURSE_PERFORMANCE} />
+        <Table columns={columns} data={filtered} />
       </section>
-
     </div>
   );
 };

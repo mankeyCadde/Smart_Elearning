@@ -1,70 +1,123 @@
-import React, { useState } from 'react';
-import { Camera, Save, Award, BookOpen, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, Award, BookOpen, CheckCircle, Flame, Trophy, Medal } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Tabs } from '../../components/ui/Tabs';
+import { useAuth } from '../../context/AuthContext';
+import { apiFetch, ApiError } from '../../services/api';
 import './Profile.css';
 
-const MOCK_USER = {
-  firstName: 'Alex',
-  lastName: 'Johnson',
-  email: 'alex.johnson@example.com',
-  phone: '+1 (555) 123-4567',
-  bio: 'Enthusiastic lifelong learner passionate about data science and UX design.',
-  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
-  joinedDate: '2023-01-15'
-};
-
-const MOCK_STATS = {
-  enrolled: 4,
-  completed: 2,
-  certificates: [
-    { id: 'cert1', name: 'Python Basics', date: '2023-08-20' },
-    { id: 'cert2', name: 'HTML & CSS Fundamentals', date: '2023-09-10' }
-  ]
-};
-
 export const Profile = () => {
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('personal');
   
   // Personal Info Form State
   const [personalInfo, setPersonalInfo] = useState({
-    firstName: MOCK_USER.firstName,
-    lastName: MOCK_USER.lastName,
-    email: MOCK_USER.email,
-    phone: MOCK_USER.phone,
-    bio: MOCK_USER.bio
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    bio: ''
   });
   const [isSavingPersonal, setIsSavingPersonal] = useState(false);
+  const [personalMessage, setPersonalMessage] = useState('');
+  const [personalError, setPersonalError] = useState('');
 
   // Security Form State
-  const [passwords, setPasswords] = useState({
-    current: '',
-    new: '',
-    confirm: ''
-  });
+  const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
-  const handleSavePersonal = () => {
+  // Gamification
+  const [gamer, setGamer] = useState(null);
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      setPersonalInfo(prev => ({
+        firstName: user.firstName ?? prev.firstName,
+        lastName: user.lastName ?? prev.lastName,
+        email: user.email ?? prev.email,
+        phone: user.phone ?? prev.phone,
+        bio: user.bio ?? prev.bio,
+      }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiFetch('/gamification/me/'),
+      apiFetch('/enrollments/mine/'),
+    ])
+      .then(([g, enroll]) => {
+        if (!cancelled) {
+          setGamer(g);
+          setEnrolledCount(enroll?.length || 0);
+          setCompletedCount(enroll?.filter(e => e.progress === 100).length || 0);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSavePersonal = async () => {
     setIsSavingPersonal(true);
-    setTimeout(() => {
+    setPersonalMessage('');
+    setPersonalError('');
+    try {
+      await updateUser({
+        firstName: personalInfo.firstName,
+        lastName: personalInfo.lastName,
+        email: personalInfo.email,
+        phone: personalInfo.phone,
+        bio: personalInfo.bio,
+      });
+      setPersonalMessage('Profile updated successfully!');
+    } catch (err) {
+      setPersonalError(err instanceof ApiError ? err.message : 'Failed to update profile.');
+    } finally {
       setIsSavingPersonal(false);
-      alert("Profile updated successfully!"); // Mock toast
-    }, 800);
+    }
   };
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
+    setPasswordMessage('');
+    setPasswordError('');
     if (passwords.new !== passwords.confirm) {
-      alert("New passwords do not match!");
+      setPasswordError('New passwords do not match!');
+      return;
+    }
+    if (!passwords.current) {
+      setPasswordError('Current password is required.');
       return;
     }
     setIsSavingPassword(true);
-    setTimeout(() => {
-      setIsSavingPassword(false);
+    try {
+      await apiFetch('/auth/change-password/', {
+        method: 'POST',
+        body: { currentPassword: passwords.current, newPassword: passwords.new },
+      });
+      setPasswordMessage('Password updated successfully!');
       setPasswords({ current: '', new: '', confirm: '' });
-      alert("Password updated successfully!"); // Mock toast
-    }, 800);
+    } catch (err) {
+      setPasswordError(err instanceof ApiError ? err.message : 'Failed to update password.');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  const joinedDate = user?.dateJoined ? new Date(user.dateJoined).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }) : '';
+  const initials = (user?.firstName?.[0] || user?.fullName?.[0] || 'U').toUpperCase();
+  const roleLabel = (user?.role || 'STUDENT').toLowerCase();
+
+  const badgeCategories = {
+    learning: 'Learning',
+    engagement: 'Engagement',
+    achievement: 'Achievement',
   };
 
   return (
@@ -72,15 +125,16 @@ export const Profile = () => {
       {/* Profile Header */}
       <div className="profile-header-card">
         <div className="profile-avatar-container">
-          <img src={MOCK_USER.avatar} alt="Profile Avatar" className="profile-avatar" />
-          <button className="avatar-upload-btn" title="Change Avatar">
-            <Camera size={16} />
-          </button>
+          {user?.avatar ? (
+            <img src={user.avatar} alt="Profile Avatar" className="profile-avatar" />
+          ) : (
+            <div className="profile-avatar profile-avatar-initial">{initials}</div>
+          )}
         </div>
         <div className="profile-header-info">
-          <h1 className="headline-lg">{personalInfo.firstName} {personalInfo.lastName}</h1>
+          <h1 className="headline-lg">{user?.fullName || user?.email}</h1>
           <p className="body-lg" style={{ color: 'var(--color-on-surface-variant)' }}>
-            Student since {MOCK_USER.joinedDate}
+            {roleLabel} {joinedDate ? `since ${joinedDate}` : ''}
           </p>
         </div>
       </div>
@@ -136,6 +190,9 @@ export const Profile = () => {
                 onChange={(e) => setPersonalInfo({ ...personalInfo, bio: e.target.value })}
               ></textarea>
             </div>
+
+            {personalMessage && <p className="body-sm" style={{ color: '#059669', marginTop: 'var(--spacing-sm)' }}>{personalMessage}</p>}
+            {personalError && <p className="body-sm" style={{ color: '#B91C1C', marginTop: 'var(--spacing-sm)' }}>{personalError}</p>}
             
             <div style={{ marginTop: 'var(--spacing-xl)', display: 'flex', justifyContent: 'flex-end' }}>
               <Button variant="primary" onClick={handleSavePersonal} disabled={isSavingPersonal} style={{ gap: '8px' }}>
@@ -171,6 +228,9 @@ export const Profile = () => {
                 onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
               />
             </div>
+
+            {passwordMessage && <p className="body-sm" style={{ color: '#059669', marginTop: 'var(--spacing-sm)' }}>{passwordMessage}</p>}
+            {passwordError && <p className="body-sm" style={{ color: '#B91C1C', marginTop: 'var(--spacing-sm)' }}>{passwordError}</p>}
             
             <div style={{ marginTop: 'var(--spacing-xl)', display: 'flex', justifyContent: 'flex-end' }}>
               <Button variant="primary" onClick={handleSavePassword} disabled={isSavingPassword || !passwords.current || !passwords.new} style={{ gap: '8px' }}>
@@ -184,39 +244,76 @@ export const Profile = () => {
         {activeTab === 'statistics' && (
           <div className="profile-stats-tab">
             <div className="stats-grid">
-              <Card className="stat-box">
-                <BookOpen size={32} style={{ color: 'var(--color-primary)', marginBottom: 'var(--spacing-sm)' }} />
-                <h3 className="headline-lg">{MOCK_STATS.enrolled}</h3>
-                <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Enrolled Courses</p>
-              </Card>
-              <Card className="stat-box">
-                <CheckCircle size={32} style={{ color: '#059669', marginBottom: 'var(--spacing-sm)' }} />
-                <h3 className="headline-lg">{MOCK_STATS.completed}</h3>
-                <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Completed Courses</p>
-              </Card>
-              <Card className="stat-box">
-                <Award size={32} style={{ color: '#D97706', marginBottom: 'var(--spacing-sm)' }} />
-                <h3 className="headline-lg">{MOCK_STATS.certificates.length}</h3>
-                <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Certificates Earned</p>
-              </Card>
+              {gamer ? (
+                <>
+                  <Card className="stat-box">
+                    <Trophy size={32} style={{ color: 'var(--color-primary)', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">{gamer.xp}</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>XP — {gamer.levelTitle}</p>
+                  </Card>
+                  <Card className="stat-box">
+                    <Flame size={32} style={{ color: '#D97706', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">{gamer.currentStreak}</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Day Streak (best {gamer.longestStreak})</p>
+                  </Card>
+                  <Card className="stat-box">
+                    <Award size={32} style={{ color: '#059669', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">{gamer.badges.length}</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Badges Earned</p>
+                  </Card>
+                </>
+              ) : (
+                <>
+                  <Card className="stat-box">
+                    <BookOpen size={32} style={{ color: 'var(--color-primary)', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">{enrolledCount}</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Enrolled Courses</p>
+                  </Card>
+                  <Card className="stat-box">
+                    <CheckCircle size={32} style={{ color: '#059669', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">{completedCount}</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Completed Courses</p>
+                  </Card>
+                  <Card className="stat-box">
+                    <Medal size={32} style={{ color: '#D97706', marginBottom: 'var(--spacing-sm)' }} />
+                    <h3 className="headline-lg">—</h3>
+                    <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Ranking</p>
+                  </Card>
+                </>
+              )}
             </div>
 
-            <Card className="profile-tab-card" style={{ marginTop: 'var(--spacing-xl)' }}>
-              <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>My Certificates</h2>
-              <div className="certificates-list">
-                {MOCK_STATS.certificates.map(cert => (
-                  <div key={cert.id} className="certificate-item">
-                    <div>
-                      <h4 className="title-md">{cert.name}</h4>
-                      <p className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Earned on {cert.date}</p>
+            {gamer && gamer.badges.length > 0 && (
+              <Card className="profile-tab-card" style={{ marginTop: 'var(--spacing-xl)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
+                  <h2 className="title-lg">My Badges</h2>
+                  <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Global rank #{gamer.ranking}</span>
+                </div>
+                <div className="badges-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--spacing-md)' }}>
+                  {gamer.badges.map(badge => (
+                    <div key={badge.id} className="badge-tile" style={{ textAlign: 'center', padding: 'var(--spacing-md)', border: '1px solid var(--color-outline-variant)', borderRadius: 'var(--rounded-md)', backgroundColor: 'var(--color-surface-container-low)' }}>
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>{badge.icon || '🎖️'}</div>
+                      <h4 className="title-sm">{badge.name}</h4>
+                      <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {badge.category ? (badgeCategories[badge.category] || badge.category) : ''} · +{badge.points} XP
+                      </p>
+                      <p className="label-sm" style={{ color: 'var(--color-primary)' }}>
+                        {badge.earnedAt ? new Date(badge.earnedAt).toLocaleDateString() : ''}
+                      </p>
                     </div>
-                    <Button variant="secondary" style={{ gap: '8px' }}>
-                      <Award size={16} /> View Certificate
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </Card>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {!gamer && (
+              <Card className="profile-tab-card" style={{ marginTop: 'var(--spacing-xl)' }}>
+                <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>My Learning</h2>
+                <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  {enrolledCount} enrolled, {completedCount} completed.
+                </p>
+              </Card>
+            )}
           </div>
         )}
 

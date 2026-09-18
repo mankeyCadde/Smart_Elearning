@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { apiFetch, ApiError } from '../../services/api';
 import './Auth.css';
 
 export const ResetPassword = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const uid = searchParams.get('uid') || '';
+  const token = searchParams.get('token') || '';
   const [formData, setFormData] = useState({ password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [linkError, setLinkError] = useState('');
 
   const validate = () => {
     const newErrors = {};
@@ -18,7 +24,9 @@ export const ResetPassword = () => {
       newErrors.password = 'Password must be at least 8 characters';
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     
@@ -26,12 +34,27 @@ export const ResetPassword = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!uid || !token) {
+      setLinkError('This reset link is invalid or incomplete. Please request a new link.');
+      return;
+    }
     if (validate()) {
-      console.log('Resetting password for mock token');
-      // Mock successful reset
-      navigate('/login');
+      setLinkError('');
+      setIsSubmitting(true);
+      try {
+        await apiFetch('/auth/reset-password/', {
+          method: 'POST',
+          body: { uid, token, newPassword: formData.password },
+          auth: false,
+        });
+        navigate('/login');
+      } catch (err) {
+        setLinkError(err instanceof ApiError ? err.message : 'Could not reset your password. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -45,6 +68,11 @@ export const ResetPassword = () => {
           </p>
         </div>
         
+        {linkError && (
+          <p className="body-sm" style={{ color: '#DC2626', backgroundColor: '#FEE2E2', padding: 'var(--spacing-sm) var(--spacing-md)', borderRadius: 'var(--rounded-sm)', marginBottom: 'var(--spacing-md)' }}>
+            {linkError}
+          </p>
+        )}
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <Input
             id="password"
@@ -66,8 +94,8 @@ export const ResetPassword = () => {
             error={errors.confirmPassword}
           />
           
-          <Button type="submit" variant="primary" className="auth-submit-btn">
-            Reset Password
+          <Button type="submit" variant="primary" className="auth-submit-btn" disabled={isSubmitting}>
+            {isSubmitting ? 'Resetting...' : 'Reset Password'}
           </Button>
         </form>
       </Card>

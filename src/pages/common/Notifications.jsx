@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Check, Info, BookOpen, FileText } from 'lucide-react';
+import { Bell, Check, Info, BookOpen, FileText, MessageSquare, MessageCircle, Award, Star, CheckCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Tabs } from '../../components/ui/Tabs';
@@ -23,6 +23,11 @@ export const Notifications = () => {
       case 'System': return <Info size={20} style={{ color: '#2563EB' }} />;
       case 'Course Updates': return <BookOpen size={20} style={{ color: '#059669' }} />;
       case 'Assignments': return <FileText size={20} style={{ color: '#D97706' }} />;
+      case 'Quizzes': return <CheckCircle size={20} style={{ color: '#7C3AED' }} />;
+      case 'Discussions': return <MessageCircle size={20} style={{ color: '#0891B2' }} />;
+      case 'Reviews': return <Star size={20} style={{ color: '#F59E0B' }} />;
+      case 'Messages': return <MessageSquare size={20} style={{ color: '#DB2777' }} />;
+      case 'Achievements': return <Award size={20} style={{ color: '#059669' }} />;
       default: return <Bell size={20} style={{ color: 'var(--color-on-surface-variant)' }} />;
     }
   };
@@ -60,6 +65,11 @@ export const Notifications = () => {
           <option value="System">System</option>
           <option value="Course Updates">Course Updates</option>
           <option value="Assignments">Assignments</option>
+          <option value="Quizzes">Quizzes</option>
+          <option value="Discussions">Discussions</option>
+          <option value="Reviews">Reviews</option>
+          <option value="Messages">Messages</option>
+          <option value="Achievements">Achievements</option>
         </select>
       </div>
 

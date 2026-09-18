@@ -1,43 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Upload, ChevronLeft, CheckCircle, File } from 'lucide-react';
+import { Upload, ChevronLeft, CheckCircle, File, Download, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { MOCK_STUDENT_ASSIGNMENTS } from './StudentAssignments';
+import { apiFetch, ApiError, API_BASE } from '../../services/api';
+
+const suffixUrl = (url) => {
+  if (!url) return url;
+  return url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
+};
+
+const formatDue = (d) => {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+};
 
 export const StudentAssignmentDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // Find assignment
-  const initialAssignment = MOCK_STUDENT_ASSIGNMENTS.find(a => a.id === id);
-  const [assignment, setAssignment] = useState(initialAssignment);
-  
-  // File upload state (mock)
+  const [assignment, setAssignment] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Submission state
+  const [content, setContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  if (!assignment) {
-    return <div className="p-xl text-center">Assignment not found</div>;
-  }
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/assignments/${id}/`)
+      .then(data => {
+        if (cancelled) return;
+        setAssignment(data);
+        if (data.mySubmission) {
+          setContent(data.mySubmission.content || '');
+        }
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [id]);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
+      setSubmitError('');
     }
   };
 
-  const handleSubmit = () => {
-    if (!selectedFile) return;
-    
+  const handleSubmit = async () => {
+    if (!selectedFile && !content.trim()) return;
     setIsSubmitting(true);
-    // Simulate upload delay
-    setTimeout(() => {
+    setSubmitError('');
+    const formData = new FormData();
+    if (content.trim()) formData.append('content', content.trim());
+    if (selectedFile) formData.append('file', selectedFile);
+    try {
+      const updated = await apiFetch(`/assignments/${id}/`, {
+        method: 'POST',
+        body: formData,
+        isFormData: true,
+      });
+      setAssignment(updated);
+      setSelectedFile(null);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : 'Failed to submit assignment.');
+    } finally {
       setIsSubmitting(false);
-      setAssignment(prev => ({ ...prev, status: 'submitted' }));
-    }, 1000);
+    }
   };
+
+  if (loading) return <p className="p-xl body-md">Loading assignment...</p>;
+  if (error || !assignment) {
+    return (
+      <div className="p-xl text-center">
+        <h2 className="headline-md">Assignment unavailable</h2>
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>{error || 'Assignment not found.'}</p>
+        <Button variant="primary" onClick={() => navigate('/student/assignments')} style={{ marginTop: 'var(--spacing-md)' }}>Back to Assignments</Button>
+      </div>
+    );
+  }
+
+  const sub = assignment.mySubmission;
+  const status = !sub ? 'pending' : sub.grade != null ? 'graded' : 'submitted';
 
   return (
     <div className="assignment-details-page">
@@ -48,15 +101,15 @@ export const StudentAssignmentDetails = () => {
       <div className="dashboard-header-section" style={{ marginBottom: 'var(--spacing-xl)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <p className="label-sm" style={{ color: 'var(--color-primary)', marginBottom: '4px' }}>
-            {assignment.courseName}
+            {assignment.courseTitle}
           </p>
           <h1 className="headline-lg">{assignment.title}</h1>
         </div>
         
         <div className="status-badge">
-          {assignment.status === 'pending' && <Badge variant="danger" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>Pending Submission</Badge>}
-          {assignment.status === 'submitted' && <Badge variant="secondary">Submitted</Badge>}
-          {assignment.status === 'graded' && <Badge variant="primary">Graded: {assignment.grade}</Badge>}
+          {status === 'pending' && <Badge variant="danger" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>Pending Submission</Badge>}
+          {status === 'submitted' && <Badge variant="secondary">Submitted</Badge>}
+          {status === 'graded' && <Badge variant="primary">Graded: {sub.grade} / {assignment.points}</Badge>}
         </div>
       </div>
 
@@ -66,19 +119,24 @@ export const StudentAssignmentDetails = () => {
           <Card className="p-xl">
             <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-md)' }}>Instructions</h2>
             <div className="body-lg" style={{ color: 'var(--color-on-surface-variant)', lineHeight: 1.6 }}>
-              <p>Please complete the following steps for this assignment:</p>
-              <ul style={{ paddingLeft: 'var(--spacing-xl)', margin: 'var(--spacing-md) 0' }}>
-                <li>Review the module materials carefully.</li>
-                <li>Download the provided dataset (if applicable).</li>
-                <li>Perform the required analysis and document your findings.</li>
-                <li>Export your final work as a PDF or ZIP file.</li>
-              </ul>
-              <p>Ensure your submission is clear and well-documented. Late submissions will incur a 10% penalty per day.</p>
+              <p>{assignment.description || 'No instructions provided yet.'}</p>
             </div>
+            
+            {status === 'graded' && sub.feedback && (
+              <div style={{ marginTop: 'var(--spacing-xl)', padding: 'var(--spacing-md)', backgroundColor: 'var(--color-surface-container-low)', borderRadius: 'var(--rounded-md)' }}>
+                <h4 className="title-sm" style={{ marginBottom: '4px' }}>Instructor Feedback</h4>
+                <p className="body-md">{sub.feedback}</p>
+                <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)', marginTop: '4px' }}>
+                  Graded {sub.gradedAt ? new Date(sub.gradedAt).toLocaleDateString() : ''} · {sub.grade} / {assignment.points} points
+                </p>
+              </div>
+            )}
             
             <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid var(--color-outline-variant)' }}>
               <h3 className="title-md" style={{ marginBottom: 'var(--spacing-sm)' }}>Due Date</h3>
-              <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>{assignment.dueDate} at 11:59 PM</p>
+              <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>
+                {assignment.dueDate ? formatDue(assignment.dueDate) : '—'} · {assignment.points} points
+              </p>
             </div>
           </Card>
         </div>
@@ -88,14 +146,24 @@ export const StudentAssignmentDetails = () => {
           <Card className="p-xl">
             <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>Your Submission</h2>
             
-            {assignment.status === 'pending' ? (
+            {status === 'pending' ? (
               <div className="submission-form">
-                <div 
-                  className="file-upload-area" 
-                  style={{ 
-                    border: '2px dashed var(--color-outline-variant)', 
-                    borderRadius: 'var(--rounded-lg)', 
-                    padding: 'var(--spacing-xxl)', 
+                <div style={{ marginBottom: 'var(--spacing-md)' }}>
+                  <label className="label-sm" style={{ display: 'block', marginBottom: '4px' }}>Submission Text</label>
+                  <textarea
+                    className="input-field"
+                    rows="4"
+                    placeholder="Write your answer here (or attach a file)"
+                    value={content}
+                    onChange={(e) => { setContent(e.target.value); setSubmitError(''); }}
+                  ></textarea>
+                </div>
+                <div
+                  className="file-upload-area"
+                  style={{
+                    border: '2px dashed var(--color-outline-variant)',
+                    borderRadius: 'var(--rounded-lg)',
+                    padding: 'var(--spacing-xl)',
                     textAlign: 'center',
                     marginBottom: 'var(--spacing-lg)',
                     backgroundColor: 'var(--color-surface-container-lowest)'
@@ -105,18 +173,18 @@ export const StudentAssignmentDetails = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                       <File size={32} style={{ color: 'var(--color-primary)' }} />
                       <span className="body-md">{selectedFile.name}</span>
-                      <Button variant="ghost" onClick={() => setSelectedFile(null)}>Remove File</Button>
+                      <Button variant="ghost" onClick={() => setSelectedFile(null)}><X size={14} /> Remove File</Button>
                     </div>
                   ) : (
                     <>
                       <Upload size={32} style={{ color: 'var(--color-on-surface-variant)', marginBottom: 'var(--spacing-md)' }} />
                       <p className="body-md" style={{ color: 'var(--color-on-surface-variant)', marginBottom: 'var(--spacing-md)' }}>
-                        Drag and drop your file here, or click to browse.
+                        Click to browse for a file.
                       </p>
-                      <input 
-                        type="file" 
-                        id="file-upload" 
-                        style={{ display: 'none' }} 
+                      <input
+                        type="file"
+                        id="file-upload"
+                        style={{ display: 'none' }}
                         onChange={handleFileChange}
                       />
                       <label htmlFor="file-upload">
@@ -125,11 +193,13 @@ export const StudentAssignmentDetails = () => {
                     </>
                   )}
                 </div>
-                
-                <Button 
-                  variant="primary" 
-                  style={{ width: '100%' }} 
-                  disabled={!selectedFile || isSubmitting}
+
+                {submitError && <p className="body-sm" style={{ color: '#B91C1C', marginBottom: 'var(--spacing-sm)' }}>{submitError}</p>}
+
+                <Button
+                  variant="primary"
+                  style={{ width: '100%' }}
+                  disabled={(!selectedFile && !content.trim()) || isSubmitting}
                   onClick={handleSubmit}
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Assignment'}
@@ -140,11 +210,24 @@ export const StudentAssignmentDetails = () => {
                 <CheckCircle size={48} style={{ color: 'var(--color-primary)', margin: '0 auto var(--spacing-md)' }} />
                 <h3 className="title-md" style={{ marginBottom: 'var(--spacing-sm)' }}>Submission Received</h3>
                 <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>
-                  Your assignment was submitted successfully.
+                  {status === 'graded' ? `Graded: ${sub.grade} / ${assignment.points}` : 'Your submission is under review.'} 
                 </p>
-                <div style={{ marginTop: 'var(--spacing-lg)', padding: 'var(--spacing-md)', backgroundColor: 'var(--color-surface-container-low)', borderRadius: 'var(--rounded-md)' }}>
-                  <p className="body-sm text-center">File: my_assignment_submission.pdf</p>
-                </div>
+                <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)', marginTop: '4px' }}>
+                  Submitted {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : ''}
+                </p>
+                {sub.content && <p className="body-sm" style={{ marginTop: 'var(--spacing-sm)' }}>{sub.content.length > 120 ? sub.content.slice(0, 120) + '…' : sub.content}</p>}
+                {(status !== 'graded') && (
+                  <Button variant="secondary" style={{ marginTop: 'var(--spacing-md)', width: '100%' }} onClick={() => setAssignment({ ...assignment, mySubmission: null })}>
+                    Edit Submission
+                  </Button>
+                )}
+                {sub.file && (
+                  <a href={suffixUrl(sub.file)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                    <Button variant="secondary" style={{ width: '100%', marginTop: 'var(--spacing-sm)', gap: '8px' }}>
+                      <Download size={16} /> Download Submission
+                    </Button>
+                  </a>
+                )}
               </div>
             )}
           </Card>

@@ -1,60 +1,130 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Search, ShieldAlert, Edit, Trash2 } from 'lucide-react';
+import { ChevronLeft, Search, ShieldAlert, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Tabs } from '../../components/ui/Tabs';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
+import { apiFetch, ApiError } from '../../services/api';
 import './Admin.css';
 
-const MOCK_USERS = [
-  { id: 'u1', name: 'Alice Johnson', email: 'alice@example.com', role: 'Student', status: 'Active', joined: '2023-11-10' },
-  { id: 'u2', name: 'Bob Smith', email: 'bob@example.com', role: 'Instructor', status: 'Active', joined: '2023-10-05' },
-  { id: 'u3', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Student', status: 'Suspended', joined: '2023-09-15' },
-  { id: 'u4', name: 'Diana Prince', email: 'diana@example.com', role: 'Admin', status: 'Active', joined: '2022-01-20' },
-  { id: 'u5', name: 'Evan Davis', email: 'evan@example.com', role: 'Student', status: 'Active', joined: '2023-11-25' },
+const ROLE_TABS = [
+  { id: 'all', label: 'All Users', query: '' },
+  { id: 'STUDENT', label: 'Students', query: 'STUDENT' },
+  { id: 'INSTRUCTOR', label: 'Instructors', query: 'INSTRUCTOR' },
+  { id: 'ADMIN', label: 'Admins', query: 'ADMIN' },
 ];
+
+const roleBadge = (role) => {
+  if (role === 'ADMIN') return <Badge variant="primary">Admin</Badge>;
+  if (role === 'INSTRUCTOR') return <Badge variant="secondary" style={{ backgroundColor: '#DBEAFE', color: '#1E40AF' }}>Instructor</Badge>;
+  return <Badge variant="secondary">Student</Badge>;
+};
 
 export const UserManagement = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // State for modals
-  const [suspendUser, setSuspendUser] = useState(null); // stores user obj when suspending
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [editUser, setEditUser] = useState(null);
+  const [confirmUser, setConfirmUser] = useState(null); // { user, action: 'suspend'|'delete' }
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [actionMsg, setActionMsg] = useState('');
 
-  // Filter users based on tabs and search
-  const filteredUsers = MOCK_USERS.filter(user => {
-    const matchesTab = activeTab === 'all' || user.role.toLowerCase() === activeTab;
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) || user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
+  const load = () => {
+    const tab = ROLE_TABS.find(t => t.id === activeTab);
+    const params = new URLSearchParams();
+    if (tab?.query) params.set('role', tab.query);
+    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    setLoading(true);
+    apiFetch(`/admin/users/?${params.toString()}`)
+      .then(data => setUsers(data || []))
+      .catch(() => setUsers([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const handleSearch = () => load();
+
+  const saveEdit = async () => {
+    try {
+      await apiFetch(`/admin/users/${editUser.id}/`, {
+        method: 'PATCH',
+        body: { role: editUser.role, isActive: editUser.isActive },
+      });
+      setActionMsg(`Updated ${editUser.fullName}.`);
+      setEditUser(null);
+      load();
+    } catch (err) {
+      window.alert(err instanceof ApiError ? err.message : 'Failed to update user.');
+    }
+  };
+
+  const confirmAction = async () => {
+    try {
+      if (confirmUser.action === 'delete') {
+        await apiFetch(`/admin/users/${confirmUser.id}/`, { method: 'DELETE' });
+        setActionMsg(`Deleted ${confirmUser.fullName}.`);
+      } else {
+        await apiFetch(`/admin/users/${confirmUser.id}/`, {
+          method: 'PATCH',
+          body: { isActive: !confirmUser.isActive },
+        });
+        setActionMsg(confirmUser.isActive ? `Suspended ${confirmUser.fullName}.` : `Reactivated ${confirmUser.fullName}.`);
+      }
+      setConfirmUser(null);
+      load();
+    } catch (err) {
+      window.alert(err instanceof ApiError ? err.message : 'Action failed.');
+    }
+  };
+
+  const [createForm, setCreateForm] = useState({ email: '', firstName: '', lastName: '', password: '', role: 'STUDENT' });
+
+  const createUser = async () => {
+    try {
+      await apiFetch('/admin/users/', {
+        method: 'POST',
+        body: {
+          email: createForm.email,
+          firstName: createForm.firstName,
+          lastName: createForm.lastName,
+          password: createForm.password,
+          role: createForm.role,
+          isActive: true,
+        },
+      });
+      setActionMsg(`Created ${createForm.email}.`);
+      setIsCreateOpen(false);
+      setCreateForm({ email: '', firstName: '', lastName: '', password: '', role: 'STUDENT' });
+      load();
+    } catch (err) {
+      window.alert(err instanceof ApiError ? err.message : 'Failed to create user.');
+    }
+  };
 
   const columns = [
-    { header: 'Name', field: 'name', render: (row) => <strong>{row.name}</strong> },
+    { header: 'Name', field: 'fullName', render: (row) => <strong>{row.fullName || row.email}</strong> },
     { header: 'Email', field: 'email', render: (row) => <span style={{ color: 'var(--color-on-surface-variant)' }}>{row.email}</span> },
-    { 
-      header: 'Role', 
-      field: 'role',
-      render: (row) => {
-        if (row.role === 'Admin') return <Badge variant="primary">Admin</Badge>;
-        if (row.role === 'Instructor') return <Badge variant="secondary" style={{ backgroundColor: '#DBEAFE', color: '#1E40AF' }}>Instructor</Badge>;
-        return <Badge variant="secondary">Student</Badge>;
-      }
-    },
-    { 
-      header: 'Status', 
-      field: 'status',
+    { header: 'Role', field: 'role', render: (row) => roleBadge(row.role) },
+    {
+      header: 'Status',
+      field: 'isActive',
       render: (row) => (
-        <Badge variant={row.status === 'Active' ? 'primary' : 'danger'} style={{ backgroundColor: row.status === 'Active' ? '#D1FAE5' : '#FEE2E2', color: row.status === 'Active' ? '#065F46' : '#991B1B' }}>
-          {row.status}
+        <Badge variant={row.isActive ? 'primary' : 'danger'} style={{ backgroundColor: row.isActive ? '#D1FAE5' : '#FEE2E2', color: row.isActive ? '#065F46' : '#991B1B' }}>
+          {row.isActive ? 'Active' : 'Suspended'}
         </Badge>
       )
     },
-    { header: 'Joined', field: 'joined' },
+    { header: 'Joined', field: 'dateJoined', render: (row) => row.dateJoined ? new Date(row.dateJoined).toLocaleDateString() : '—' },
+    { header: 'Enrollments', field: 'enrollmentsCount', render: (row) => <span style={{ color: 'var(--color-on-surface-variant)' }}>{row.enrollmentsCount}</span> },
     {
       header: 'Actions',
       field: 'actions',
@@ -63,15 +133,12 @@ export const UserManagement = () => {
           <button className="icon-btn" onClick={() => setEditUser(row)} title="Edit Role">
             <Edit size={16} />
           </button>
-          {row.status === 'Active' ? (
-            <button className="icon-btn danger" onClick={() => setSuspendUser(row)} title="Suspend User">
-              <ShieldAlert size={16} />
-            </button>
-          ) : (
-            <button className="icon-btn" style={{ color: '#059669' }} onClick={() => alert('User reactivated')} title="Reactivate User">
-              <ShieldAlert size={16} />
-            </button>
-          )}
+          <button className="icon-btn" style={{ color: row.isActive ? '#DC2626' : '#059669' }} onClick={() => setConfirmUser({ ...row, action: 'status' })} title={row.isActive ? 'Suspend User' : 'Reactivate User'}>
+            <ShieldAlert size={16} />
+          </button>
+          <button className="icon-btn danger" onClick={() => setConfirmUser({ ...row, action: 'delete' })} title="Delete User">
+            <Trash2 size={16} />
+          </button>
         </div>
       )
     }
@@ -90,73 +157,128 @@ export const UserManagement = () => {
             Manage platform access and roles.
           </p>
         </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', backgroundColor: 'var(--color-surface-container-lowest)', padding: '8px 12px', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-outline)' }}>
-          <Search size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
-          <input 
-            type="text" 
-            placeholder="Search users..." 
-            style={{ border: 'none', outline: 'none', background: 'transparent' }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', backgroundColor: 'var(--color-surface-container-lowest)', padding: '8px 12px', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-outline)' }}>
+            <Search size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+            <input
+              type="text"
+              placeholder="Search users..."
+              style={{ border: 'none', outline: 'none', background: 'transparent' }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+            />
+          </div>
+          <Button variant="primary" onClick={() => setIsCreateOpen(true)} style={{ gap: '6px' }}>
+            <Plus size={16} /> Add User
+          </Button>
         </div>
       </div>
 
-      <Tabs 
-        tabs={[
-          { id: 'all', label: 'All Users' },
-          { id: 'student', label: 'Students' },
-          { id: 'instructor', label: 'Instructors' },
-          { id: 'admin', label: 'Admins' }
-        ]} 
-        activeTab={activeTab} 
-        onChange={setActiveTab} 
+      {actionMsg && <p className="body-sm" style={{ color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>{actionMsg}</p>}
+
+      <Tabs
+        tabs={ROLE_TABS.map(t => ({ id: t.id, label: t.label }))}
+        activeTab={activeTab}
+        onChange={setActiveTab}
       />
 
       <section style={{ marginTop: 'var(--spacing-xl)' }}>
-        <Table columns={columns} data={filteredUsers} />
-        {filteredUsers.length === 0 && (
-          <div className="text-center p-xl" style={{ border: '1px dashed var(--color-outline)', borderTop: 'none' }}>
-            <p className="body-md">No users found matching your search.</p>
-          </div>
+        {loading ? (
+          <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>Loading users...</p>
+        ) : (
+          <>
+            <Table columns={columns} data={users} />
+            {users.length === 0 && (
+              <div className="text-center p-xl" style={{ border: '1px dashed var(--color-outline)', borderTop: 'none' }}>
+                <p className="body-md">No users found.</p>
+              </div>
+            )}
+          </>
         )}
       </section>
 
-      {/* Modals */}
-      {suspendUser && (
-        <Modal isOpen={true} onClose={() => setSuspendUser(null)} title="Suspend User">
-          <div className="modal-body">
-            <p className="body-md" style={{ marginBottom: 'var(--spacing-md)' }}>
-              Are you sure you want to suspend <strong>{suspendUser.name}</strong>? They will no longer be able to log in.
-            </p>
-            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
-              <Button variant="ghost" onClick={() => setSuspendUser(null)}>Cancel</Button>
-              <Button variant="danger" onClick={() => { alert('User suspended'); setSuspendUser(null); }}>Suspend User</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
       {editUser && (
-        <Modal isOpen={true} onClose={() => setEditUser(null)} title={`Edit Role: ${editUser.name}`}>
+        <Modal isOpen={true} onClose={() => setEditUser(null)} title={`Edit Role: ${editUser.fullName}`}>
           <div className="modal-body">
             <div style={{ marginBottom: 'var(--spacing-md)' }}>
               <label className="label-sm" style={{ display: 'block', marginBottom: '4px' }}>Assign Role</label>
-              <select className="input-field" style={{ width: '100%' }} defaultValue={editUser.role}>
-                <option value="Student">Student</option>
-                <option value="Instructor">Instructor</option>
-                <option value="Admin">Admin</option>
+              <select
+                className="input-field"
+                style={{ width: '100%' }}
+                value={editUser.role}
+                onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
+              >
+                <option value="STUDENT">Student</option>
+                <option value="INSTRUCTOR">Instructor</option>
+                <option value="ADMIN">Admin</option>
               </select>
             </div>
-            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={editUser.isActive}
+                onChange={(e) => setEditUser({ ...editUser, isActive: e.target.checked })}
+              />
+              <span className="body-md">Account active</span>
+            </label>
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-xl)' }}>
               <Button variant="ghost" onClick={() => setEditUser(null)}>Cancel</Button>
-              <Button variant="primary" onClick={() => { alert('Role updated'); setEditUser(null); }}>Save Changes</Button>
+              <Button variant="primary" onClick={saveEdit}>Save Changes</Button>
             </div>
           </div>
         </Modal>
       )}
 
+      {confirmUser && (
+        <Modal isOpen={true} onClose={() => setConfirmUser(null)} title={confirmUser.action === 'delete' ? 'Delete User' : confirmUser.isActive ? 'Suspend User' : 'Reactivate User'}>
+          <div className="modal-body">
+            <p className="body-md" style={{ marginBottom: 'var(--spacing-md)' }}>
+              {confirmUser.action === 'delete'
+                ? `Permanently delete ${confirmUser.fullName}? This cannot be undone.`
+                : `Are you sure you want to ${confirmUser.isActive ? 'suspend' : 'reactivate'} ${confirmUser.fullName}?`}
+            </p>
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
+              <Button variant="ghost" onClick={() => setConfirmUser(null)}>Cancel</Button>
+              <Button variant={confirmUser.action === 'delete' ? 'danger' : 'primary'} onClick={confirmAction}>
+                {confirmUser.action === 'delete' ? 'Delete User' : confirmUser.isActive ? 'Suspend User' : 'Reactivate User'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {isCreateOpen && (
+        <Modal isOpen={true} onClose={() => setIsCreateOpen(false)} title="Add New User">
+          <div className="modal-body">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+              <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
+                <div style={{ flex: 1 }}>
+                  <Input label="First Name" value={createForm.firstName} onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Input label="Last Name" value={createForm.lastName} onChange={(e) => setCreateForm({ ...createForm, lastName: e.target.value })} />
+                </div>
+              </div>
+              <Input label="Email" type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
+              <Input label="Password" type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
+              <div>
+                <label className="label-sm" style={{ display: 'block', marginBottom: '4px' }}>Role</label>
+                <select className="input-field" style={{ width: '100%' }} value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}>
+                  <option value="STUDENT">Student</option>
+                  <option value="INSTRUCTOR">Instructor</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-xl)' }}>
+              <Button variant="ghost" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+              <Button variant="primary" onClick={createUser}>Create User</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

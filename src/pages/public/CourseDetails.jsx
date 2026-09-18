@@ -1,126 +1,143 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Star, Clock, Users, PlayCircle, FileText, CheckCircle, Lock } from 'lucide-react';
+import { Star, Clock, Users, PlayCircle, FileText, CheckCircle, Award } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Tabs } from '../../components/ui/Tabs';
 import { Accordion, AccordionItem } from '../../components/ui/Accordion';
 import { Modal } from '../../components/ui/Modal';
+import { useAuth } from '../../context/AuthContext';
+import { apiFetch, ApiError } from '../../services/api';
 import './CourseDetails.css';
 
-// Comprehensive Mock Data
-const MOCK_COURSE = {
-  id: 'c1',
-  title: 'Advanced Data Science with Python',
-  subtitle: 'Master machine learning, data visualization, and statistical analysis using Python.',
-  category: 'Data Science',
-  level: 'Advanced',
-  rating: 4.8,
-  reviews: 1240,
-  students: 15400,
-  language: 'English',
-  lastUpdated: '10/2023',
-  price: 89.99,
-  instructor: {
-    name: 'Dr. Sarah Chen',
-    title: 'Lead Data Scientist at TechCorp',
-    bio: 'Dr. Chen has over 10 years of experience in data science and machine learning. She holds a PhD in Computer Science from MIT.',
-    avatar: 'SC'
-  },
-  stats: {
-    duration: '12 hours on-demand video',
-    articles: '15 articles',
-    resources: '45 downloadable resources',
-    certificate: 'Certificate of completion'
-  },
-  curriculum: [
-    {
-      id: 'm1',
-      title: 'Module 1: Introduction to Advanced Python',
-      duration: '45 mins',
-      lessons: [
-        { id: 'l1', title: 'Setting up your environment', duration: '10:00', type: 'video', isFree: true },
-        { id: 'l2', title: 'Python refresher', duration: '20:00', type: 'video', isFree: true },
-        { id: 'l3', title: 'Module 1 Quiz', duration: '15:00', type: 'quiz', isFree: false }
-      ]
-    },
-    {
-      id: 'm2',
-      title: 'Module 2: Data Manipulation with Pandas',
-      duration: '2.5 hours',
-      lessons: [
-        { id: 'l4', title: 'Advanced DataFrames', duration: '30:00', type: 'video', isFree: false },
-        { id: 'l5', title: 'Handling missing data', duration: '25:00', type: 'video', isFree: false },
-        { id: 'l6', title: 'Pandas exercise', duration: '45:00', type: 'assignment', isFree: false }
-      ]
-    },
-    {
-      id: 'm3',
-      title: 'Module 3: Machine Learning Models',
-      duration: '4 hours',
-      lessons: [
-        { id: 'l7', title: 'Regression algorithms', duration: '40:00', type: 'video', isFree: false },
-        { id: 'l8', title: 'Classification algorithms', duration: '45:00', type: 'video', isFree: false },
-        { id: 'l9', title: 'Building your first model', duration: '1:00:00', type: 'video', isFree: false }
-      ]
-    }
-  ]
+const LESSON_ICON = { VIDEO: PlayCircle, READ: FileText, QUIZ: FileText, ASSIGNMENT: FileText, TEXT: FileText };
+
+const formatUpdated = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 export const CourseDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  // In a real app, fetch course by id. Using mock for now.
-  const course = MOCK_COURSE;
+  const { user } = useAuth();
+
+  const [course, setCourse] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Enrollment State: 'idle' | 'confirm' | 'loading' | 'success' | 'enrolled'
-  const [enrollState, setEnrollState] = React.useState('idle');
+  const [enrollState, setEnrollState] = useState('idle');
+  const [isEnrolled, setIsEnrolled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await apiFetch(`/courses/${id}/`);
+        if (cancelled) return;
+        setCourse(c);
+        const r = await apiFetch(`/courses/${id}/reviews/`);
+        if (!cancelled) setReviews(r || []);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // Check existing enrollment for logged-in students
+  useEffect(() => {
+    if (!user || user.role !== 'STUDENT' || !course) return;
+    let cancelled = false;
+    apiFetch('/enrollments/mine/')
+      .then(list => {
+        if (!cancelled && (list || []).some(e => e.courseId === Number(id))) {
+          setIsEnrolled(true);
+          setEnrollState('enrolled');
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user, course, id]);
 
   const handleEnrollClick = () => {
-    if (enrollState === 'enrolled') {
+    if (enrollState === 'enrolled' || isEnrolled) {
       navigate(`/student/course/${course.id}/video`);
-    } else {
-      setEnrollState('confirm');
+      return;
     }
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    if (user.role !== 'STUDENT') return;
+    setEnrollState('confirm');
   };
 
-  const confirmEnrollment = () => {
+  const confirmEnrollment = async () => {
+    if (course.price > 0) {
+      setEnrollState('idle');
+      navigate(`/student/checkout/${course.id}`);
+      return;
+    }
     setEnrollState('loading');
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await apiFetch('/enrollments/', { method: 'POST', body: { courseId: Number(course.id) } });
       setEnrollState('success');
-    }, 1500);
+    } catch (err) {
+      setEnrollState('idle');
+      alert(err instanceof ApiError ? err.message : 'Enrollment failed. Please try again.');
+    }
   };
 
   const closeEnrollmentModal = () => {
     if (enrollState === 'success') {
       setEnrollState('enrolled');
+      setIsEnrolled(true);
     } else {
       setEnrollState('idle');
     }
   };
 
+  if (loading) {
+    return <div className="container" style={{ padding: 'var(--spacing-xxl)', textAlign: 'center' }}><div className="spinner" style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid var(--color-surface-container-high)', borderTop: '4px solid var(--color-primary)', borderRadius: '50%', animation: 'cspin 1s linear infinite' }}></div><style>{`@keyframes cspin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style></div>;
+  }
+
+  if (error || !course) {
+    return (
+      <div className="container" style={{ padding: 'var(--spacing-xxl)', textAlign: 'center' }}>
+        <h2 className="headline-md">Course not found</h2>
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>{error || 'This course may be unavailable.'}</p>
+        <Link to="/catalog"><Button variant="primary" style={{ marginTop: 'var(--spacing-md)' }}>Back to Catalog</Button></Link>
+      </div>
+    );
+  }
+
+  const lessonCount = course.sections.reduce((acc, s) => acc + (s.lessons?.length || 0), 0);
+  const isOwner = user && user.id === course.instructor;
+
   const overviewTab = (
     <div className="tab-pane-content">
       <h2 className="title-lg">Course Description</h2>
-      <p className="body-md">
-        This course is designed to take your Python skills to the next level. We will dive deep into data science concepts, focusing on practical implementation rather than just theory.
-      </p>
+      <p className="body-md">{course.description || 'No description provided yet.'}</p>
       <br/>
-      <h3 className="title-md">What you'll learn</h3>
+      <h3 className="title-md">Course Details</h3>
       <ul className="body-md list-styled">
-        <li>Build complex machine learning models using Scikit-Learn</li>
-        <li>Manipulate and analyze large datasets with Pandas and NumPy</li>
-        <li>Create stunning data visualizations using Seaborn and Matplotlib</li>
-        <li>Deploy your models to production environments</li>
-      </ul>
-      <br/>
-      <h3 className="title-md">Requirements</h3>
-      <ul className="body-md list-styled">
-        <li>Basic understanding of Python programming (variables, loops, functions)</li>
-        <li>High school level mathematics</li>
-        <li>A computer with internet access</li>
+        <li><strong>Level:</strong> {course.level}</li>
+        <li><strong>Sections:</strong> {course.sections.length}</li>
+        <li><strong>Lessons:</strong> {lessonCount}</li>
+        <li><strong>Instructor:</strong> {course.instructorName}</li>
       </ul>
     </div>
   );
@@ -129,34 +146,33 @@ export const CourseDetails = () => {
     <div className="tab-pane-content">
       <div className="curriculum-header">
         <h2 className="title-lg">Course Content</h2>
-        <span className="body-sm">{course.curriculum.length} sections • {course.stats.duration} total length</span>
+        <span className="body-sm">{course.sections.length} sections • {lessonCount} lessons</span>
       </div>
       
       <Accordion>
-        {course.curriculum.map((module, index) => (
+        {course.sections.map((module, index) => (
           <AccordionItem 
             key={module.id} 
             title={module.title}
             defaultOpen={index === 0}
-            rightContent={<span className="body-sm">{module.duration}</span>}
+            rightContent={<span className="body-sm">{module.lessons.length} lessons</span>}
           >
             <div className="lesson-list">
-              {module.lessons.map(lesson => (
-                <div key={lesson.id} className="lesson-item">
-                  <div className="lesson-info">
-                    {lesson.type === 'video' ? <PlayCircle size={16} /> : <FileText size={16} />}
-                    <span className="body-md lesson-title">{lesson.title}</span>
+              {module.lessons.map(lesson => {
+                const Icon = LESSON_ICON[lesson.type] || FileText;
+                return (
+                  <div key={lesson.id} className="lesson-item">
+                    <div className="lesson-info">
+                      <Icon size={16} />
+                      <span className="body-md lesson-title">{lesson.title}</span>
+                    </div>
+                    <div className="lesson-meta">
+                      <span className="badge-preview label-sm">{lesson.type}</span>
+                      <span className="body-sm">{Math.round((lesson.duration || 0) / 60)} min</span>
+                    </div>
                   </div>
-                  <div className="lesson-meta">
-                    {lesson.isFree ? (
-                      <span className="badge-preview label-sm">Preview</span>
-                    ) : (
-                      <Lock size={14} className="icon-locked" />
-                    )}
-                    <span className="body-sm">{lesson.duration}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </AccordionItem>
         ))}
@@ -168,16 +184,48 @@ export const CourseDetails = () => {
     <div className="tab-pane-content instructor-profile">
       <div className="instructor-header">
         <div className="instructor-avatar">
-          {course.instructor.avatar}
+          {course.instructorName?.charAt(0) || 'I'}
         </div>
         <div className="instructor-info">
-          <h3 className="title-lg">{course.instructor.name}</h3>
-          <p className="body-md">{course.instructor.title}</p>
+          <h3 className="title-lg">{course.instructorName}</h3>
+          <p className="body-md">Course Instructor</p>
         </div>
       </div>
-      <p className="body-md" style={{ marginTop: 'var(--spacing-md)' }}>
-        {course.instructor.bio}
-      </p>
+    </div>
+  );
+
+  const reviewsTab = (
+    <div className="tab-pane-content">
+      <div className="curriculum-header">
+        <h2 className="title-lg">Student Reviews</h2>
+        <span className="body-sm">{course.reviews} reviews</span>
+      </div>
+      <div className="reviews-list" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-md)' }}>
+        {reviews.length === 0 ? (
+          <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>No reviews yet — be the first!</p>
+        ) : reviews.map(review => (
+          <Card key={review.id} style={{ padding: 'var(--spacing-lg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-xs)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="rating">
+                  <Star size={14} fill="#F59E0B" color="#F59E0B" />
+                  <span className="label-md">{review.rating}.0</span>
+                </div>
+                <span className="title-sm">{review.studentName}</span>
+              </div>
+              <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>{formatDate(review.createdAt)}</span>
+            </div>
+            {review.title && <h4 className="title-md">{review.title}</h4>}
+            {review.comment && <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>{review.comment}</p>}
+            {review.instructorReply && (
+              <div style={{ marginTop: 'var(--spacing-sm)', padding: 'var(--spacing-sm)', backgroundColor: 'var(--color-surface-container-low)', borderRadius: 'var(--rounded-sm)' }}>
+                <p className="label-sm" style={{ color: 'var(--color-primary)' }}>Instructor Response</p>
+                <p className="body-sm">{review.instructorReply}</p>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
     </div>
   );
 
@@ -192,7 +240,7 @@ export const CourseDetails = () => {
             </div>
             
             <h1 className="display-sm">{course.title}</h1>
-            <p className="body-lg subtitle">{course.subtitle}</p>
+            <p className="body-lg subtitle">{course.description}</p>
             
             <div className="course-hero-meta">
               <Badge variant="primary">{course.category}</Badge>
@@ -203,16 +251,16 @@ export const CourseDetails = () => {
               </div>
               <div className="students">
                 <Users size={16} />
-                <span className="body-sm">{course.students.toLocaleString()} students</span>
+                <span className="body-sm">{course.enrolledStudents} students</span>
               </div>
             </div>
             
             <div className="course-hero-author body-sm">
-              Created by <span className="author-name">{course.instructor.name}</span>
+              Created by <span className="author-name">{course.instructorName}</span>
             </div>
             
             <div className="course-hero-updated body-sm">
-              <Clock size={14} /> Last updated {course.lastUpdated}
+              <Clock size={14} /> Last updated {formatUpdated(course.updatedAt || course.createdAt)}
             </div>
           </div>
         </div>
@@ -225,7 +273,8 @@ export const CourseDetails = () => {
             tabs={[
               { id: 'overview', label: 'Overview', content: overviewTab },
               { id: 'curriculum', label: 'Curriculum', content: curriculumTab },
-              { id: 'instructor', label: 'Instructor', content: instructorTab }
+              { id: 'instructor', label: 'Instructor', content: instructorTab },
+              { id: 'reviews', label: `Reviews (${course.reviews})`, content: reviewsTab }
             ]}
           />
         </div>
@@ -239,29 +288,39 @@ export const CourseDetails = () => {
             
             <div className="enrollment-body">
               <div className="price-tag headline-md">
-                {enrollState === 'enrolled' ? 'Purchased' : `$${course.price}`}
+                {enrollState === 'enrolled' || isEnrolled
+                  ? 'Enrolled'
+                  : course.price === 0
+                    ? 'Free'
+                    : `$${course.price}`}
               </div>
               
-              <Button 
-                variant={enrollState === 'enrolled' ? 'secondary' : 'primary'} 
-                size="lg" 
-                className="enroll-btn" 
-                onClick={handleEnrollClick}
-              >
-                {enrollState === 'enrolled' ? 'Continue Learning' : 'Enroll Now'}
-              </Button>
-              {enrollState !== 'enrolled' && (
+              {(user && user.role === 'INSTRUCTOR' && isOwner) ? (
+                <Button variant="secondary" size="lg" className="enroll-btn" onClick={() => navigate(`/instructor/course/${course.id}/edit`)}>
+                  Manage Course
+                </Button>
+              ) : (
+                <Button 
+                  variant={enrollState === 'enrolled' || isEnrolled ? 'secondary' : 'primary'} 
+                  size="lg" 
+                  className="enroll-btn" 
+                  onClick={handleEnrollClick}
+                >
+                  {enrollState === 'enrolled' || isEnrolled ? 'Continue Learning' : !user ? 'Log in to Enroll' : 'Enroll Now'}
+                </Button>
+              )}
+              {(enrollState !== 'enrolled' && !isEnrolled) && (
                 <p className="body-sm text-center" style={{ margin: 'var(--spacing-sm) 0 var(--spacing-lg)' }}>
-                  30-Day Money-Back Guarantee
+                  {course.price === 0 ? 'Start learning instantly, for free.' : '30-Day Money-Back Guarantee'}
                 </p>
               )}
               
               <h4 className="title-sm" style={{ marginBottom: 'var(--spacing-md)' }}>This course includes:</h4>
               <ul className="course-features body-sm">
-                <li><PlayCircle size={16}/> {course.stats.duration}</li>
-                <li><FileText size={16}/> {course.stats.articles}</li>
-                <li><CheckCircle size={16}/> {course.stats.resources}</li>
-                <li><Award size={16}/> {course.stats.certificate}</li>
+                <li><PlayCircle size={16}/> {course.sections.length} sections</li>
+                <li><FileText size={16}/> {lessonCount} lessons</li>
+                <li><CheckCircle size={16}/> {course.level} level</li>
+                <li><Award size={16}/> Certificate of completion</li>
               </ul>
             </div>
           </Card>
@@ -277,11 +336,12 @@ export const CourseDetails = () => {
         {enrollState === 'confirm' && (
           <div className="enroll-confirm-view">
             <p className="body-md" style={{ marginBottom: 'var(--spacing-lg)' }}>
-              You are about to enroll in <strong>{course.title}</strong> for <strong>${course.price}</strong>.
+              You are about to enroll in <strong>{course.title}</strong>
+              {course.price > 0 ? <> for <strong>${course.price}</strong></> : <> — it's <strong>free</strong></>}.
             </p>
             <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'flex-end' }}>
               <Button variant="ghost" onClick={closeEnrollmentModal}>Cancel</Button>
-              <Button variant="primary" onClick={confirmEnrollment}>Confirm Payment</Button>
+              <Button variant="primary" onClick={confirmEnrollment}>Confirm Enrollment</Button>
             </div>
           </div>
         )}
@@ -289,7 +349,7 @@ export const CourseDetails = () => {
         {enrollState === 'loading' && (
           <div className="enroll-loading-view" style={{ textAlign: 'center', padding: 'var(--spacing-xl) 0' }}>
             <div className="spinner" style={{ margin: '0 auto var(--spacing-md)', width: '40px', height: '40px', border: '4px solid var(--color-surface-container-high)', borderTop: '4px solid var(--color-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-            <p className="body-md">Processing your enrollment...</p>
+            <p className="body-md">Enrolling you in the course...</p>
           </div>
         )}
 
@@ -312,6 +372,3 @@ export const CourseDetails = () => {
     </div>
   );
 };
-
-// Needed an extra import that wasn't at the top
-import { Award } from 'lucide-react';

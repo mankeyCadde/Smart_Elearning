@@ -2,17 +2,25 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { DashboardLayout } from './layouts/DashboardLayout';
-import { PlaceholderPage } from './pages/PlaceholderPage';
+import { RequireRole } from './components/auth/RequireRole';
 import { Home } from './pages/public/Home';
 import { Catalog } from './pages/public/Catalog';
 import { CourseDetails } from './pages/public/CourseDetails';
+import { SearchResults } from './pages/public/SearchResults';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { VideoLearning } from './pages/student/VideoLearning';
 import { Dashboard as StudentDashboard } from './pages/student/Dashboard';
+import { EnrolledCourse } from './pages/student/EnrolledCourse';
+import { CourseProgress } from './pages/student/CourseProgress';
+import { EnrollmentConfirm } from './pages/student/EnrollmentConfirm';
+import { EnrollmentSuccessful } from './pages/student/EnrollmentSuccessful';
+import { SubmitQuizConfirmation } from './pages/student/SubmitQuizConfirmation';
 import { StudentAttendance } from './pages/student/StudentAttendance';
+import { Checkout } from './pages/student/Checkout';
+import { Orders } from './pages/student/Orders';
 import { InstructorAttendance } from './pages/instructor/InstructorAttendance';
 import { Notes as StudentNotes } from './pages/student/Notes';
 import { Bookmarks as StudentBookmarks } from './pages/student/Bookmarks';
@@ -28,10 +36,13 @@ import { InstructorSubmissions } from './pages/instructor/InstructorSubmissions'
 import { InstructorDashboard } from './pages/instructor/InstructorDashboard';
 import { InstructorProfile } from './pages/instructor/InstructorProfile';
 import { CourseEditor } from './pages/instructor/CourseEditor';
+import { QuizBuilder } from './pages/instructor/QuizBuilder';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UserManagement } from './pages/admin/UserManagement';
 import { CourseManagement } from './pages/admin/CourseManagement';
 import { ReportsDashboard } from './pages/admin/ReportsDashboard';
+import { AdminCourseReport } from './pages/admin/AdminCourseReport';
+import { CouponManagement } from './pages/admin/CouponManagement';
 import { AdminProfile } from './pages/admin/AdminProfile';
 import { NotificationProvider } from './context/NotificationContext';
 import { Notifications } from './pages/common/Notifications';
@@ -45,7 +56,7 @@ function App() {
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<Catalog />} />
-          <Route path="/search" element={<PlaceholderPage title="Search Results" />} />
+          <Route path="/search" element={<SearchResults />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -54,10 +65,14 @@ function App() {
         </Route>
 
         {/* Video Learning Route (Full screen, no layout wrapping) */}
-        <Route path="/student/course/:id/video" element={<VideoLearning />} />
+        <Route path="/student/course/:id/video" element={<RequireRole />}>
+          <Route index element={<VideoLearning />} />
+        </Route>
         
         {/* Quiz Route (Full screen, no layout wrapping) */}
-        <Route path="/student/quiz/:id" element={<StudentQuiz />} />
+        <Route path="/student/quiz/:id" element={<RequireRole />}>
+          <Route index element={<StudentQuiz />} />
+        </Route>
 
         {/* Student Routes */}
         <Route path="/student" element={<DashboardLayout role="STUDENT" />}>
@@ -65,8 +80,8 @@ function App() {
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="courses" element={<StudentDashboard />} />
-          <Route path="course/:id" element={<PlaceholderPage title="Course Details (Enrolled)" />} />
-          <Route path="course/:id/progress" element={<PlaceholderPage title="Detailed Course Progress" />} />
+          <Route path="course/:id" element={<EnrolledCourse />} />
+          <Route path="course/:id/progress" element={<CourseProgress />} />
           <Route path="quizzes/history" element={<QuizHistory />} />
           <Route path="assignments" element={<StudentAssignments />} />
           <Route path="assignment/:id" element={<StudentAssignmentDetails />} />
@@ -76,11 +91,13 @@ function App() {
           <Route path="certificates" element={<StudentCertificates />} />
           <Route path="certificate/:id" element={<StudentCertificateDetails />} />
           <Route path="attendance" element={<StudentAttendance />} />
+          <Route path="checkout/:id" element={<Checkout />} />
+          <Route path="orders" element={<Orders />} />
           
-          {/* Action Confirmations (Usually modals or toast, but placeholders for now) */}
-          <Route path="enrollment-confirmation" element={<PlaceholderPage title="Enrollment Confirmation" />} />
-          <Route path="enrollment-successful" element={<PlaceholderPage title="Enrollment Successful" />} />
-          <Route path="submit-quiz-confirmation" element={<PlaceholderPage title="Submit Quiz Confirmation" />} />
+          {/* Action Confirmations (enrollment + quiz submission) */}
+          <Route path="enrollment-confirmation" element={<EnrollmentConfirm />} />
+          <Route path="enrollment-successful" element={<EnrollmentSuccessful />} />
+          <Route path="submit-quiz-confirmation" element={<SubmitQuizConfirmation />} />
         </Route>
 
         {/* Instructor Routes */}
@@ -90,7 +107,7 @@ function App() {
           <Route path="courses" element={<InstructorDashboard />} />
           <Route path="course/new" element={<CourseEditor />} />
           <Route path="course/:id/edit" element={<CourseEditor />} />
-          <Route path="quiz-builder" element={<PlaceholderPage title="Quiz Builder" />} />
+          <Route path="quiz-builder" element={<QuizBuilder />} />
           <Route path="assignments" element={<InstructorAssignments />} />
           <Route path="assignment/:id/submissions" element={<InstructorSubmissions />} />
           <Route path="notifications" element={<Notifications />} />
@@ -106,7 +123,8 @@ function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="courses" element={<CourseManagement />} />
           <Route path="reports" element={<ReportsDashboard />} />
-          <Route path="reports/course/:id" element={<PlaceholderPage title="Detailed Course Report" />} />
+          <Route path="coupons" element={<CouponManagement />} />
+          <Route path="reports/course/:id" element={<AdminCourseReport />} />
           <Route path="profile" element={<AdminProfile />} />
         </Route>
         

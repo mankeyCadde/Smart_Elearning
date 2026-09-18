@@ -1,86 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Modal } from '../../components/ui/Modal';
+import { apiFetch, ApiError } from '../../services/api';
 import './Quiz.css';
-
-// Mock Quiz Data
-const MOCK_QUIZ = {
-  id: 'q1',
-  title: 'Module 1 Assessment: Python Basics',
-  courseName: 'Advanced Data Science with Python',
-  questions: [
-    {
-      id: 'q_1',
-      text: 'Which of the following is NOT a core data type in Python?',
-      options: [
-        { id: 'opt_1', text: 'Lists' },
-        { id: 'opt_2', text: 'Dictionaries' },
-        { id: 'opt_3', text: 'Tuples' },
-        { id: 'opt_4', text: 'Class' },
-      ],
-      correctOptionId: 'opt_4'
-    },
-    {
-      id: 'q_2',
-      text: 'What is the output of `print(2 ** 3)`?',
-      options: [
-        { id: 'opt_1', text: '6' },
-        { id: 'opt_2', text: '8' },
-        { id: 'opt_3', text: '9' },
-        { id: 'opt_4', text: 'Error' },
-      ],
-      correctOptionId: 'opt_2'
-    },
-    {
-      id: 'q_3',
-      text: 'Which keyword is used to define a function in Python?',
-      options: [
-        { id: 'opt_1', text: 'function' },
-        { id: 'opt_2', text: 'def' },
-        { id: 'opt_3', text: 'func' },
-        { id: 'opt_4', text: 'define' },
-      ],
-      correctOptionId: 'opt_2'
-    }
-  ]
-};
 
 export const Quiz = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
+  const [quiz, setQuiz] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [noAttempts, setNoAttempts] = useState(false);
+
   // State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState({}); // { questionId: selectedOptionId }
-  const [quizPhase, setQuizPhase] = useState('taking'); // 'taking', 'confirming', 'submitted'
+  const [answers, setAnswers] = useState({}); // { questionId: optionId | textAnswer }
+  const [quizPhase, setQuizPhase] = useState('taking'); // 'taking', 'confirming', 'submitting', 'submitted'
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [textAnswer, setTextAnswer] = useState('');
 
-  // Derived State
-  const totalQuestions = MOCK_QUIZ.questions.length;
-  const currentQuestion = MOCK_QUIZ.questions[currentQuestionIndex];
-  const progressPercentage = ((currentQuestionIndex + 1) / totalQuestions) * 100;
-  
+  // Load quiz + (re)start attempt
+  const loadQuiz = (startNew = true) => {
+    setLoading(true);
+    setError('');
+    setNoAttempts(false);
+    (async () => {
+      try {
+        let data = await apiFetch(`/quizzes/${id}/`);
+        if (startNew && !data.inProgressSubmissionId && data.attemptsLeft > 0) {
+          await apiFetch(`/quizzes/${id}/start/`, { method: 'POST' });
+          data = await apiFetch(`/quizzes/${id}/`);
+        }
+        if (data.attemptsLeft <= 0 && !data.inProgressSubmissionId) {
+          setNoAttempts(true);
+        }
+        setQuiz(data);
+        setAnswers({});
+        setTextAnswer('');
+        setCurrentQuestionIndex(0);
+        setResult(null);
+        setQuizPhase('taking');
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load quiz.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  };
+
+  useEffect(() => {
+    loadQuiz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  if (loading) {
+    return <div className="quiz-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <p className="body-lg">Loading quiz...</p>
+    </div>;
+  }
+
+  if (error) {
+    return (
+      <div className="quiz-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 'var(--spacing-md)' }}>
+        <h2 className="headline-md">Quiz unavailable</h2>
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)', maxWidth: '420px', textAlign: 'center' }}>{error}</p>
+        <Button variant="primary" onClick={() => navigate('/student')}>Back to Dashboard</Button>
+      </div>
+    );
+  }
+
+  if (noAttempts || !quiz) {
+    return (
+      <div className="quiz-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 'var(--spacing-md)', textAlign: 'center', padding: 'var(--spacing-xl)' }}>
+        <CheckCircle size={56} color="var(--color-primary)" />
+        <h2 className="headline-md">{quiz ? `${quiz.title} complete` : 'No attempts remaining'}</h2>
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)', maxWidth: '460px' }}>
+          {quiz ? `You've used all ${quiz.maxAttempts} attempt(s). Best score: ${quiz.bestScore ?? 0}%.` : 'You have no attempts left for this quiz.'}
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
+          <Button variant="secondary" onClick={() => navigate('/student')}>Back to Dashboard</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const questions = quiz.questions || [];
+  const totalQuestions = questions.length;
+  const currentQuestion = questions[currentQuestionIndex];
+  const progressPercentage = totalQuestions ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
+
   const isFirstQuestion = currentQuestionIndex === 0;
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
-  const hasAnsweredCurrent = !!answers[currentQuestion.id];
-  const allAnswered = Object.keys(answers).length === totalQuestions;
+
+  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
+  const hasAnsweredCurrent = currentAnswer !== undefined && currentAnswer !== '';
+  const allAnswered = questions.every(q => {
+    const a = answers[q.id];
+    return a !== undefined && a !== '';
+  });
 
   // Handlers
   const handleSelectOption = (optionId) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestion.id]: optionId
-    }));
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: optionId }));
+  };
+
+  const handleTextChange = (value) => {
+    setTextAnswer(value);
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }));
   };
 
   const handleNext = () => {
+    setTextAnswer('');
     if (!isLastQuestion) setCurrentQuestionIndex(prev => prev + 1);
   };
 
   const handlePrev = () => {
+    setTextAnswer('');
     if (!isFirstQuestion) setCurrentQuestionIndex(prev => prev - 1);
   };
 
@@ -88,35 +129,44 @@ export const Quiz = () => {
     setQuizPhase('confirming');
   };
 
-  const confirmSubmit = () => {
-    setQuizPhase('submitted');
+  const confirmSubmit = async () => {
+    setQuizPhase('submitting');
+    setSubmitting(true);
+    try {
+      const payload = questions.map(q => {
+        const value = answers[q.id];
+        if (q.questionType === 'SA') {
+          return { questionId: q.id, textAnswer: value || '' };
+        }
+        return { questionId: q.id, optionId: value };
+      });
+      const submission = await apiFetch(`/quizzes/${id}/submit/`, {
+        method: 'POST',
+        body: { answers: payload },
+      });
+      setResult(submission);
+      setQuizPhase('submitted');
+    } catch (err) {
+      setQuizPhase('taking');
+      alert(err instanceof ApiError ? err.message : 'Failed to submit quiz.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Calculate Score (only used when phase is 'submitted')
-  const calculateScore = () => {
-    let correct = 0;
-    MOCK_QUIZ.questions.forEach(q => {
-      if (answers[q.id] === q.correctOptionId) {
-        correct += 1;
-      }
-    });
-    return { correct, percentage: Math.round((correct / totalQuestions) * 100) };
-  };
+  const passed = result ? result.score >= (quiz.passingScore || 70) : false;
+  const isShortAnswer = currentQuestion?.questionType === 'SA';
 
-  // Render Sub-Views
-  if (quizPhase === 'submitted') {
-    const score = calculateScore();
-    const passed = score.percentage >= 70;
-
+  if (quizPhase === 'submitted' && result) {
     return (
       <div className="quiz-page result-view" style={{ padding: 0 }}>
         <header className="quiz-header">
           <div className="quiz-header-content">
             <div>
               <p className="label-sm" style={{ color: 'var(--color-primary)', marginBottom: '4px' }}>
-                {MOCK_QUIZ.courseName}
+                {result.courseTitle}
               </p>
-              <h1 className="title-lg">{MOCK_QUIZ.title} - Results</h1>
+              <h1 className="title-lg">{result.quizTitle} - Results</h1>
             </div>
             <Button variant="ghost" onClick={() => navigate('/student/dashboard')} style={{ gap: '8px' }}>
               <XCircle size={20} /> Exit
@@ -134,22 +184,20 @@ export const Quiz = () => {
               {passed ? 'Congratulations, you passed!' : 'Keep Practicing'}
             </h1>
             <p className="body-lg" style={{ textAlign: 'center', color: 'var(--color-on-surface-variant)', marginBottom: 'var(--spacing-xl)' }}>
-              You scored <strong style={{ color: 'var(--color-on-surface)' }}>{score.percentage}%</strong> ({score.correct} out of {totalQuestions} correct)
+              You scored <strong style={{ color: 'var(--color-on-surface)' }}>{result.score}%</strong> · Attempt {result.attemptNumber}
             </p>
             
             <div className="result-actions">
-              {!passed && (
-                <Button variant="secondary" onClick={() => {
-                  setAnswers({});
-                  setCurrentQuestionIndex(0);
-                  setQuizPhase('taking');
-                }}>
+              {quiz.attemptsLeft > 0 && (
+                <Button variant="secondary" onClick={() => loadQuiz()}>
                   Retake Quiz
                 </Button>
               )}
-              <Button variant="primary" onClick={() => navigate(`/student/course/c1/video`)}>
-                Continue Course
-              </Button>
+              {quiz.courseId && (
+                <Button variant="primary" onClick={() => navigate(`/student/course/${quiz.courseId}/video`)}>
+                  Continue Course
+                </Button>
+              )}
             </div>
           </Card>
 
@@ -158,19 +206,23 @@ export const Quiz = () => {
             <h2 className="title-lg" style={{ marginBottom: 'var(--spacing-lg)' }}>Question Review</h2>
             
             <div className="review-list" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-              {MOCK_QUIZ.questions.map((q, index) => {
-                const isCorrect = answers[q.id] === q.correctOptionId;
-                const userAnswerText = q.options.find(opt => opt.id === answers[q.id])?.text;
-                const correctAnswerText = q.options.find(opt => opt.id === q.correctOptionId)?.text;
+              {result.answers.map((q, index) => {
+                const isCorrect = q.isCorrect === true;
+                const pending = q.isCorrect == null;
+                const yourAnswer = q.selectedOptionText || q.textAnswer || 'No answer';
 
                 return (
-                  <Card key={q.id} className="review-question-card" style={{ padding: 'var(--spacing-lg)' }}>
+                  <Card key={q.questionId} className="review-question-card" style={{ padding: 'var(--spacing-lg)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-md)' }}>
                       <h3 className="title-md" style={{ color: 'var(--color-on-surface)' }}>
                         <span style={{ color: 'var(--color-on-surface-variant)', marginRight: '8px' }}>{index + 1}.</span> 
-                        {q.text}
+                        {q.questionText}
                       </h3>
-                      {isCorrect ? (
+                      {pending ? (
+                        <span className="label-sm" style={{ color: '#D97706', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#FEF3C7', padding: '4px 8px', borderRadius: 'var(--rounded-sm)' }}>
+                          <Clock size={14} /> Pending Grading
+                        </span>
+                      ) : isCorrect ? (
                         <span className="label-sm" style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--color-primary-container)', padding: '4px 8px', borderRadius: 'var(--rounded-sm)' }}>
                           <CheckCircle size={14} /> Correct
                         </span>
@@ -185,18 +237,9 @@ export const Quiz = () => {
                       <p style={{ marginBottom: 'var(--spacing-xs)' }}>
                         <span style={{ color: 'var(--color-on-surface-variant)' }}>Your Answer: </span>
                         <span style={{ color: isCorrect ? 'var(--color-primary)' : '#DC2626', fontWeight: 500 }}>
-                          {userAnswerText}
+                          {yourAnswer}
                         </span>
                       </p>
-                      
-                      {!isCorrect && (
-                        <p>
-                          <span style={{ color: 'var(--color-on-surface-variant)' }}>Correct Answer: </span>
-                          <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>
-                            {correctAnswerText}
-                          </span>
-                        </p>
-                      )}
                     </div>
                   </Card>
                 );
@@ -215,9 +258,12 @@ export const Quiz = () => {
         <div className="quiz-header-content">
           <div>
             <p className="label-sm" style={{ color: 'var(--color-primary)', marginBottom: '4px' }}>
-              {MOCK_QUIZ.courseName}
+              {quiz.courseTitle}
             </p>
-            <h1 className="title-lg">{MOCK_QUIZ.title}</h1>
+            <h1 className="title-lg">{quiz.title}</h1>
+            <p className="body-sm" style={{ color: 'var(--color-on-surface-variant)', marginTop: '2px' }}>
+              {quiz.timeLimitMinutes > 0 && <>⏱ {quiz.timeLimitMinutes} min · </>}Passing: {quiz.passingScore}% · Attempts left: {quiz.attemptsLeft}
+            </p>
           </div>
           <Button variant="ghost" onClick={() => navigate('/student/dashboard')} style={{ gap: '8px' }}>
             <XCircle size={20} /> Exit Quiz
@@ -226,75 +272,96 @@ export const Quiz = () => {
       </header>
 
       {/* Main Container */}
-      <main className="quiz-main-container">
-        <Card className="quiz-question-card">
-          {/* Progress */}
-          <div className="quiz-progress-section">
-            <div className="progress-labels">
-              <span className="label-md">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
-              <span className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
-                {Math.round(progressPercentage)}%
-              </span>
+      {totalQuestions === 0 ? (
+        <main className="quiz-main-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <Card style={{ textAlign: 'center', padding: 'var(--spacing-xxl)' }}>
+            <h2 className="headline-md">No questions available</h2>
+            <Button variant="primary" style={{ marginTop: 'var(--spacing-md)' }} onClick={() => navigate('/student')}>Back to Dashboard</Button>
+          </Card>
+        </main>
+      ) : (
+        <main className="quiz-main-container">
+          <Card className="quiz-question-card">
+            {/* Progress */}
+            <div className="quiz-progress-section">
+              <div className="progress-labels">
+                <span className="label-md">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
+                <span className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                  {Math.round(progressPercentage)}%
+                </span>
+              </div>
+              <ProgressBar percentage={progressPercentage} size="sm" />
             </div>
-            <ProgressBar percentage={progressPercentage} size="sm" />
-          </div>
 
-          {/* Question Text */}
-          <div className="quiz-question-text">
-            <h2 className="headline-sm">{currentQuestion.text}</h2>
-          </div>
+            {/* Question Text */}
+            <div className="quiz-question-text">
+              <h2 className="headline-sm">{currentQuestion.text}</h2>
+            </div>
 
-          {/* Options */}
-          <div className="quiz-options-list">
-            {currentQuestion.options.map(option => {
-              const isSelected = answers[currentQuestion.id] === option.id;
-              return (
-                <div 
-                  key={option.id} 
-                  className={`quiz-option ${isSelected ? 'selected' : ''}`}
-                  onClick={() => handleSelectOption(option.id)}
-                >
-                  <div className="option-radio">
-                    {isSelected && <div className="radio-dot"></div>}
-                  </div>
-                  <span className="body-lg">{option.text}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Navigation */}
-          <div className="quiz-navigation">
-            <Button 
-              variant="secondary" 
-              onClick={handlePrev} 
-              disabled={isFirstQuestion}
-              style={{ gap: '8px' }}
-            >
-              <ChevronLeft size={18} /> Previous
-            </Button>
-            
-            {isLastQuestion ? (
-              <Button 
-                variant="primary" 
-                onClick={handleSubmitRequest}
-                disabled={!allAnswered}
-              >
-                Submit Quiz
-              </Button>
+            {/* Options / Text Answer */}
+            {isShortAnswer ? (
+              <div className="quiz-options-list">
+                <textarea 
+                  className="input-field"
+                  rows="4"
+                  placeholder="Type your answer here..."
+                  value={textAnswer}
+                  onChange={(e) => handleTextChange(e.target.value)}
+                ></textarea>
+              </div>
             ) : (
+              <div className="quiz-options-list">
+                {(currentQuestion.options || []).map(option => {
+                  const isSelected = answers[currentQuestion.id] === option.id;
+                  return (
+                    <div 
+                      key={option.id} 
+                      className={`quiz-option ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleSelectOption(option.id)}
+                    >
+                      <div className="option-radio">
+                        {isSelected && <div className="radio-dot"></div>}
+                      </div>
+                      <span className="body-lg">{option.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="quiz-navigation">
               <Button 
-                variant="primary" 
-                onClick={handleNext}
-                disabled={!hasAnsweredCurrent}
+                variant="secondary" 
+                onClick={handlePrev} 
+                disabled={isFirstQuestion}
                 style={{ gap: '8px' }}
               >
-                Next <ChevronRight size={18} />
+                <ChevronLeft size={18} /> Previous
               </Button>
-            )}
-          </div>
-        </Card>
-      </main>
+              
+              {isLastQuestion ? (
+                <Button 
+                  variant="primary" 
+                  onClick={handleSubmitRequest}
+                  disabled={!allAnswered || submitting}
+                >
+                  Submit Quiz
+                </Button>
+              ) : (
+                <Button 
+                  variant="primary" 
+                  onClick={handleNext}
+                  disabled={!hasAnsweredCurrent}
+                  style={{ gap: '8px' }}
+                >
+                  Next <ChevronRight size={18} />
+                </Button>
+              )}
+            </div>
+          </Card>
+        </main>
+      )}
 
       {/* Submission Confirmation Modal */}
       {quizPhase === 'confirming' && (
@@ -311,8 +378,8 @@ export const Quiz = () => {
               <Button variant="secondary" onClick={() => setQuizPhase('taking')}>
                 Review Answers
               </Button>
-              <Button variant="primary" onClick={confirmSubmit}>
-                Yes, Submit Now
+              <Button variant="primary" onClick={confirmSubmit} disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Yes, Submit Now'}
               </Button>
             </div>
           </div>

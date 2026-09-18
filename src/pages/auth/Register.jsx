@@ -1,19 +1,33 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../context/AuthContext';
+import { ApiError } from '../../services/api';
 import './Auth.css';
+
+const ROLE_HOME = {
+  ADMIN: '/admin/dashboard',
+  INSTRUCTOR: '/instructor/dashboard',
+  STUDENT: '/student/dashboard',
+};
 
 export const Register = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialRole = searchParams.get('role') === 'instructor' ? 'instructor' : 'student';
+  const { register } = useAuth();
   const [formData, setFormData] = useState({ 
     fullName: '', 
     email: '', 
     password: '', 
     confirmPassword: '' 
   });
+  const [role, setRole] = useState(initialRole);
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors = {};
@@ -39,11 +53,32 @@ export const Register = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validate()) {
-      console.log('Registering with:', formData);
-      navigate('/student/dashboard');
+    setServerError('');
+    if (!validate()) return;
+
+    setSubmitting(true);
+    try {
+      const user = await register(formData, role);
+      navigate(ROLE_HOME[user.role] || '/student/dashboard');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.fields && typeof err.fields === 'object' && !Array.isArray(err.fields)) {
+          const firstField = Object.keys(err.fields)[0];
+          if (firstField && Array.isArray(err.fields[firstField])) {
+            setErrors({ [firstField]: err.fields[firstField][0] });
+          } else {
+            setServerError(err.message);
+          }
+        } else {
+          setServerError(err.message);
+        }
+      } else {
+        setServerError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -56,6 +91,35 @@ export const Register = () => {
         </div>
         
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {serverError && (
+            <div className="auth-server-error" role="alert">
+              {serverError}
+            </div>
+          )}
+
+          <div className="auth-role-switch" role="radiogroup" aria-label="Account type">
+            <label className="auth-role-label body-sm">
+              <input
+                type="radio"
+                name="role"
+                value="student"
+                checked={role === 'student'}
+                onChange={() => setRole('student')}
+              />
+              Student
+            </label>
+            <label className="auth-role-label body-sm">
+              <input
+                type="radio"
+                name="role"
+                value="instructor"
+                checked={role === 'instructor'}
+                onChange={() => setRole('instructor')}
+              />
+              Instructor
+            </label>
+          </div>
+
           <Input
             id="fullName"
             type="text"
@@ -96,8 +160,8 @@ export const Register = () => {
             error={errors.confirmPassword}
           />
           
-          <Button type="submit" variant="primary" className="auth-submit-btn">
-            Sign Up
+          <Button type="submit" variant="primary" className="auth-submit-btn" disabled={submitting}>
+            {submitting ? 'Creating account...' : 'Sign Up'}
           </Button>
           
           <div className="auth-footer body-sm">

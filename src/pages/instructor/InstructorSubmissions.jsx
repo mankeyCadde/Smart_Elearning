@@ -1,84 +1,128 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, FileText, CheckCircle } from 'lucide-react';
+import { ChevronLeft, FileText, Download } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
+import { apiFetch, ApiError, API_BASE } from '../../services/api';
 
-// Mock Submissions Data
-const INITIAL_SUBMISSIONS = [
-  { id: 's1', studentName: 'Alice Johnson', dateSubmitted: '2023-11-10', file: 'alice_data_cleaning.pdf', grade: 'A', status: 'graded' },
-  { id: 's2', studentName: 'Bob Smith', dateSubmitted: '2023-11-12', file: 'bob_project.zip', grade: null, status: 'submitted' },
-  { id: 's3', studentName: 'Charlie Brown', dateSubmitted: '2023-11-14', file: 'charlie_analysis.pdf', grade: null, status: 'submitted' },
-  { id: 's4', studentName: 'Diana Prince', dateSubmitted: '-', file: null, grade: null, status: 'pending' },
-];
+const suffixUrl = (url) => {
+  if (!url) return url;
+  return url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
+};
 
 export const InstructorSubmissions = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  
-  const [submissions, setSubmissions] = useState(INITIAL_SUBMISSIONS);
-  const [activeGradeStudent, setActiveGradeStudent] = useState(null); // stores submission object when grading
+
+  const [assignment, setAssignment] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeGradeStudent, setActiveGradeStudent] = useState(null);
   const [gradeInput, setGradeInput] = useState('');
+  const [feedbackInput, setFeedbackInput] = useState('');
+  const [gradeError, setGradeError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = () =>
+    apiFetch(`/instructor/assignments/${id}/submissions/`)
+      .then(data => setSubmissions(data || []))
+      .catch(() => {});
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiFetch(`/assignments/${id}/`).catch(() => null),
+      apiFetch(`/instructor/assignments/${id}/submissions/`).catch(() => []),
+    ])
+      .then(([asg, subs]) => {
+        if (cancelled) return;
+        setAssignment(asg);
+        setSubmissions(subs || []);
+      })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id]);
 
   const handleOpenGrade = (submission) => {
     setActiveGradeStudent(submission);
-    setGradeInput(submission.grade || '');
+    setGradeInput(submission.grade ?? '');
+    setFeedbackInput(submission.feedback || '');
+    setGradeError('');
   };
 
-  const handleSaveGrade = () => {
+  const handleSaveGrade = async () => {
     if (!activeGradeStudent) return;
-    
-    setSubmissions(prev => prev.map(sub => 
-      sub.id === activeGradeStudent.id 
-        ? { ...sub, grade: gradeInput, status: 'graded' }
-        : sub
-    ));
-    setActiveGradeStudent(null);
+    if (gradeInput === '' || Number(gradeInput) < 0) { setGradeError('Enter a valid grade.'); return; }
+    setSaving(true);
+    setGradeError('');
+    try {
+      await apiFetch(`/instructor/assignment-submissions/${activeGradeStudent.id}/grade/`, {
+        method: 'POST',
+        body: { grade: Number(gradeInput), feedback: feedbackInput.trim() },
+      });
+      await load();
+      setActiveGradeStudent(null);
+    } catch (err) {
+      setGradeError(err instanceof ApiError ? err.message : 'Failed to save grade.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const columns = [
     { header: 'Student Name', field: 'studentName', render: (row) => <strong style={{ color: 'var(--color-on-surface)' }}>{row.studentName}</strong> },
-    { 
-      header: 'Status', 
+    {
+      header: 'Status',
       field: 'status',
+      render: (row) => (
+        row.status === 'GRADED'
+          ? <Badge variant="primary">Graded</Badge>
+          : <Badge variant="secondary">Needs Grading</Badge>
+      )
+    },
+    {
+      header: 'Date Submitted',
+      field: 'submittedAt',
+      render: (row) => row.submittedAt ? new Date(row.submittedAt).toLocaleDateString() : '—'
+    },
+    {
+      header: 'Submission',
+      field: 'content',
       render: (row) => {
-        if (row.status === 'pending') return <Badge variant="danger" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>Pending</Badge>;
-        if (row.status === 'submitted') return <Badge variant="secondary">Needs Grading</Badge>;
-        return <Badge variant="primary">Graded</Badge>;
+        if (row.file) {
+          return (
+            <a href={suffixUrl(row.file)} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'none' }}>
+              <FileText size={14} /> <Download size={14} /> View File
+            </a>
+          );
+        }
+        if (row.content) return <span style={{ maxWidth: '240px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.content}</span>;
+        return <span style={{ color: 'var(--color-on-surface-variant)' }}>No file</span>;
       }
     },
-    { header: 'Date Submitted', field: 'dateSubmitted' },
-    { 
-      header: 'Submission File', 
-      field: 'file',
-      render: (row) => row.file ? (
-        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-primary)', cursor: 'pointer' }}>
-          <FileText size={14} /> {row.file}
-        </span>
-      ) : <span style={{ color: 'var(--color-on-surface-variant)' }}>No File</span>
-    },
-    { 
-      header: 'Grade', 
+    {
+      header: 'Grade',
       field: 'grade',
-      render: (row) => row.grade ? <strong>{row.grade}</strong> : '-'
+      render: (row) => row.grade != null ? <strong>{row.grade} / {assignment?.points ?? '—'}</strong> : '-'
     },
     {
       header: 'Actions',
       field: 'actions',
       render: (row) => (
-        <Button 
-          variant="secondary" 
-          disabled={row.status === 'pending'}
-          onClick={() => handleOpenGrade(row)}
-        >
-          {row.status === 'graded' ? 'Edit Grade' : 'Grade'}
+        <Button variant="secondary" onClick={() => handleOpenGrade(row)}>
+          {row.status === 'GRADED' ? 'Edit Grade' : 'Grade'}
         </Button>
       )
     }
   ];
+
+  if (loading) return <p className="p-xl body-md">Loading submissions...</p>;
+  if (error) return <div className="p-xl text-center"><p className="body-md" style={{ color: '#B91C1C' }}>{error}</p></div>;
 
   return (
     <div className="submissions-page">
@@ -87,7 +131,7 @@ export const InstructorSubmissions = () => {
       </Button>
 
       <div className="dashboard-header-section" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <h1 className="headline-lg">Assignment Submissions</h1>
+        <h1 className="headline-lg">{assignment?.title || 'Assignment Submissions'}</h1>
         <p className="body-lg" style={{ color: 'var(--color-on-surface-variant)', marginTop: 'var(--spacing-xs)' }}>
           Review and grade student work.
         </p>
@@ -95,36 +139,45 @@ export const InstructorSubmissions = () => {
 
       <section>
         <Table columns={columns} data={submissions} />
+        {submissions.length === 0 && (
+          <p className="body-md text-center" style={{ color: 'var(--color-on-surface-variant)', padding: 'var(--spacing-xl)' }}>
+            No submissions yet.
+          </p>
+        )}
       </section>
 
-      {/* Grading Modal */}
       {activeGradeStudent && (
         <Modal isOpen={true} onClose={() => setActiveGradeStudent(null)} title={`Grade Submission: ${activeGradeStudent.studentName}`}>
           <div className="modal-body">
-            <div style={{ marginBottom: 'var(--spacing-lg)', padding: 'var(--spacing-md)', backgroundColor: 'var(--color-surface-container-lowest)', border: '1px solid var(--color-outline-variant)', borderRadius: 'var(--rounded-md)' }}>
-              <p className="label-sm" style={{ marginBottom: '4px' }}>Submitted File:</p>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-primary)', cursor: 'pointer' }}>
-                <FileText size={16} /> {activeGradeStudent.file}
-              </span>
-            </div>
-            
-            <Input 
-              label="Grade (e.g. A, B+, 95/100)" 
+            {activeGradeStudent.content && (
+              <div style={{ marginBottom: 'var(--spacing-lg)', padding: 'var(--spacing-md)', backgroundColor: 'var(--color-surface-container-lowest)', border: '1px solid var(--color-outline-variant)', borderRadius: 'var(--rounded-md)' }}>
+                <p className="label-sm" style={{ marginBottom: '4px' }}>Student's response:</p>
+                <p className="body-md" style={{ whiteSpace: 'pre-wrap' }}>{activeGradeStudent.content}</p>
+              </div>
+            )}
+
+            <Input
+              label={`Grade (0 – ${assignment?.points ?? 'max'})`}
+              type="number"
               value={gradeInput}
               onChange={(e) => setGradeInput(e.target.value)}
+              error={gradeError}
             />
-            
+
             <div style={{ marginTop: 'var(--spacing-md)' }}>
               <label className="label-sm" style={{ display: 'block', marginBottom: '4px' }}>Feedback (Optional)</label>
-              <textarea 
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-outline)', minHeight: '80px', fontFamily: 'inherit' }}
+              <textarea
+                className="input-field body-md"
+                style={{ width: '100%', minHeight: '80px', fontFamily: 'inherit' }}
                 placeholder="Leave comments for the student..."
+                value={feedbackInput}
+                onChange={(e) => setFeedbackInput(e.target.value)}
               ></textarea>
             </div>
 
             <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-xl)' }}>
               <Button variant="ghost" onClick={() => setActiveGradeStudent(null)}>Cancel</Button>
-              <Button variant="primary" onClick={handleSaveGrade}>Save Grade</Button>
+              <Button variant="primary" onClick={handleSaveGrade} disabled={saving}>{saving ? 'Saving...' : 'Save Grade'}</Button>
             </div>
           </div>
         </Modal>

@@ -1,0 +1,55 @@
+.checkout-page {
+  padding: var(--spacing-xl) 0;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.checkout-layout {
+  display: flex;
+  gap: var(--spacing-xl);
+  flex-wrap: wrap;
+}
+
+.order-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-body-md);
+}
+
+.summary-row.discount {
+  color: #059669;
+  font-weight: 600;
+}
+
+.summary-row.total {
+  border-top: 1px solid var(--color-outline-variant);
+  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-body-lg);
+  font-weight: 700;
+}
+
+.checkout-success-card {
+  max-width: 520px;
+  margin: var(--spacing-xxl) auto;
+  padding: var(--spacing-xxl);
+  text-align: center;
+}
+
+.spin {
+  animation: chk-spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: -3px;
+}
+
+@keyframes chk-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

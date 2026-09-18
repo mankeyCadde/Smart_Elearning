@@ -1,67 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Users, BookOpen, Award } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
 import { CourseCard } from '../../components/domain/CourseCard';
+import { apiFetch } from '../../services/api';
 import './Home.css';
 
-// Mock Data
-const MOCK_CATEGORIES = [
-  { id: 1, name: 'Data Science', count: '120 Courses' },
-  { id: 2, name: 'Web Development', count: '240 Courses' },
-  { id: 3, name: 'Business', count: '85 Courses' },
-  { id: 4, name: 'Design', count: '110 Courses' },
-];
-
-const MOCK_COURSES = [
-  {
-    id: 'c1',
-    title: 'Advanced Data Science with Python',
-    instructor: 'Dr. Sarah Chen',
-    category: 'Data Science',
-    rating: 4.8,
-    reviews: 1240,
-    duration: '12 weeks',
-    price: 89.99,
-    isPopular: true
-  },
-  {
-    id: 'c2',
-    title: 'Full-Stack React & Node.js Bootcamp',
-    instructor: 'Alex Mercer',
-    category: 'Web Dev',
-    rating: 4.9,
-    reviews: 3100,
-    duration: '10 weeks',
-    price: 99.99,
-    isPopular: true
-  },
-  {
-    id: 'c3',
-    title: 'UX/UI Design Principles',
-    instructor: 'Mia Wong',
-    category: 'Design',
-    rating: 4.7,
-    reviews: 850,
-    duration: '6 weeks',
-    price: 49.99,
-    isPopular: false
-  },
-  {
-    id: 'c4',
-    title: 'Financial Analysis Masterclass',
-    instructor: 'James Sterling',
-    category: 'Business',
-    rating: 4.6,
-    reviews: 420,
-    duration: '8 weeks',
-    price: 79.99,
-    isPopular: false
-  }
-];
-
 export const Home = () => {
+  const [popularCourses, setPopularCourses] = useState([]);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    
+    // Fetch Popular Courses
+    apiFetch('/courses/')
+      .then(data => {
+        if (!cancelled) {
+          const list = (data && data.results) || data || [];
+          const sorted = [...list].sort((a, b) => (b.reviews ?? 0) - (a.reviews ?? 0));
+          setPopularCourses(sorted.slice(0, 4).map(c => ({ ...c, isPopular: true })));
+        }
+      })
+      .catch(() => {});
+      
+    // Fetch Categories
+    apiFetch('/courses/categories/')
+      .then(data => {
+        if (!cancelled) {
+          const list = (data && data.results) || data || [];
+          setCategories(list.slice(0, 4));
+        }
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="home-page">
       {/* Hero Section */}
@@ -128,10 +103,10 @@ export const Home = () => {
             <Link to="/catalog" className="text-link label-lg">View All Categories</Link>
           </div>
           <div className="categories-grid">
-            {MOCK_CATEGORIES.map(category => (
+            {categories.map(category => (
               <Link to={`/catalog?category=${category.name}`} key={category.id} className="category-card">
                 <h3 className="title-md">{category.name}</h3>
-                <p className="body-sm">{category.count}</p>
+                <p className="body-sm">{category._courses_count} Courses</p>
               </Link>
             ))}
           </div>
@@ -146,7 +121,7 @@ export const Home = () => {
             <Link to="/catalog" className="text-link label-lg">Explore All Courses</Link>
           </div>
           <div className="courses-grid">
-            {MOCK_COURSES.map(course => (
+            {popularCourses.map(course => (
               <CourseCard key={course.id} course={course} />
             ))}
           </div>

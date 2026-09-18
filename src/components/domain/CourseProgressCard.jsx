@@ -7,8 +7,12 @@ import { Button } from '../ui/Button';
 import './CourseProgressCard.css';
 
 export const CourseProgressCard = ({ course }) => {
-  const percentage = Math.round((course.completedLessons / course.totalLessons) * 100);
-  const isCompleted = percentage === 100;
+  const total = course.totalLessons || 0;
+  const done = course.completedLessons || 0;
+  const percentage = course.progress != null
+    ? Math.round(course.progress)
+    : total ? Math.round((done / total) * 100) : 0;
+  const isCompleted = total > 0 && percentage >= 100;
 
   return (
     <Card className="progress-card">
@@ -24,7 +28,7 @@ export const CourseProgressCard = ({ course }) => {
         
         <div className="progress-section">
           <div className="progress-stats body-sm">
-            <span>{course.completedLessons} / {course.totalLessons} lessons</span>
+            <span>{done} / {total} lessons</span>
             <span>{percentage}%</span>
           </div>
           <ProgressBar percentage={percentage} color={isCompleted ? 'var(--color-secondary)' : 'var(--color-primary)'} />

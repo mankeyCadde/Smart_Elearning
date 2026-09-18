@@ -1,23 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Bell, User } from 'lucide-react';
+import { Outlet, Link, useNavigate, Navigate } from 'react-router-dom';
+import { Bell, LogOut } from 'lucide-react';
 import { Sidebar } from '../components/navigation/Sidebar';
 import { Button } from '../components/ui/Button';
 import { useNotifications } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 import './DashboardLayout.css';
 import '../pages/common/Notifications.css'; // For dropdown styles
 
+const ROLE_HOME = {
+  ADMIN: '/admin/dashboard',
+  INSTRUCTOR: '/instructor/dashboard',
+  STUDENT: '/student/dashboard',
+};
+
 export const DashboardLayout = ({ role = 'STUDENT' }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const userMenuRef = useRef(null);
   const navigate = useNavigate();
   const { notifications, unreadCount, markAllAsRead } = useNotifications();
+  const { user, loading, role: userRole, logout } = useAuth();
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -28,6 +41,15 @@ export const DashboardLayout = ({ role = 'STUDENT' }) => {
     setIsDropdownOpen(false);
     navigate(`/${role.toLowerCase()}/notifications`);
   };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (userRole !== role) return <Navigate to={ROLE_HOME[userRole] || '/login'} replace />;
 
   return (
     <div className="dashboard-layout">
@@ -45,6 +67,7 @@ export const DashboardLayout = ({ role = 'STUDENT' }) => {
                 className="icon-btn" 
                 style={{ position: 'relative', marginRight: 'var(--spacing-md)' }}
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                aria-label="Notifications"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -102,9 +125,47 @@ export const DashboardLayout = ({ role = 'STUDENT' }) => {
               )}
             </div>
 
-            <Button variant="ghost" onClick={() => navigate(`/${role.toLowerCase()}/profile`)} style={{ gap: '8px' }}>
-              <User size={18} /> Profile
-            </Button>
+            {/* User Menu */}
+            <div ref={userMenuRef} style={{ position: 'relative' }}>
+              <button
+                className="icon-btn user-chip"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', borderRadius: 'var(--rounded-full)', border: '1px solid var(--color-outline-variant)' }}
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              >
+                <span style={{
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: 'var(--color-primary)', color: 'white',
+                  fontSize: '12px', fontWeight: '600'
+                }}>
+                  {(user.firstName?.[0] || user.fullName?.[0] || 'U').toUpperCase()}
+                </span>
+                <span className="label-md" style={{ color: 'var(--color-on-surface)' }}>
+                  {user.firstName || user.fullName || user.email}
+                </span>
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="notification-dropdown" style={{ right: 0 }}>
+                  <Link
+                    to={`/${role.toLowerCase()}/profile`}
+                    className="dropdown-item"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    style={{ textDecoration: 'none', color: 'var(--color-on-surface)' }}
+                  >
+                    <span className="body-md">My Profile</span>
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="dropdown-item"
+                    style={{ textDecoration: 'none', color: '#B91C1C', background: 'none', border: 'none', width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                  >
+                    <LogOut size={16} />
+                    <span className="body-md">Log Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main className="dashboard-main-content">

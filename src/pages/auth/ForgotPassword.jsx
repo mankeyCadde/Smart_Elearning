@@ -3,23 +3,33 @@ import { Link } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { apiFetch, ApiError } from '../../services/api';
 import './Auth.css';
 
 export const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) {
       setError('Email is required');
+      return;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
       setError('Email is invalid');
-    } else {
-      setError('');
+      return;
+    }
+    setError('');
+    setIsSubmitting(true);
+    try {
+      await apiFetch('/auth/forgot-password/', { method: 'POST', body: { email }, auth: false });
       setIsSubmitted(true);
-      console.log('Sending reset link to:', email);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -57,8 +67,8 @@ export const ForgotPassword = () => {
               error={error}
             />
             
-            <Button type="submit" variant="primary" className="auth-submit-btn">
-              Send Reset Link
+            <Button type="submit" variant="primary" className="auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Sending...' : 'Send Reset Link'}
             </Button>
             
             <div className="auth-footer body-sm">

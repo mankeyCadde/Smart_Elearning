@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "node e2e/run.js",
+    "test:e2e:all": "bash e2e/run-with-servers.sh"
   },
   "dependencies": {
     "lucide-react": "^1.37.0",

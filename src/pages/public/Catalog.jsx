@@ -2,24 +2,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, X, SearchX } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
 import { CourseCard } from '../../components/domain/CourseCard';
+import { apiFetch } from '../../services/api';
 import './Catalog.css';
 
-// Extended Mock Data for Catalog
-const MOCK_COURSES = [
-  { id: 'c1', title: 'Advanced Data Science with Python', instructor: 'Dr. Sarah Chen', category: 'Data Science', level: 'Advanced', rating: 4.8, reviews: 1240, duration: '12 weeks', price: 89.99, dateAdded: '2023-01-15' },
-  { id: 'c2', title: 'Full-Stack React & Node.js', instructor: 'Alex Mercer', category: 'Web Dev', level: 'Intermediate', rating: 4.9, reviews: 3100, duration: '10 weeks', price: 99.99, dateAdded: '2023-03-20' },
-  { id: 'c3', title: 'UX/UI Design Principles', instructor: 'Mia Wong', category: 'Design', level: 'Beginner', rating: 4.7, reviews: 850, duration: '6 weeks', price: 49.99, dateAdded: '2023-05-10' },
-  { id: 'c4', title: 'Financial Analysis Masterclass', instructor: 'James Sterling', category: 'Business', level: 'Intermediate', rating: 4.6, reviews: 420, duration: '8 weeks', price: 79.99, dateAdded: '2023-02-28' },
-  { id: 'c5', title: 'Introduction to Machine Learning', instructor: 'Dr. Sarah Chen', category: 'Data Science', level: 'Beginner', rating: 4.5, reviews: 900, duration: '8 weeks', price: 0, dateAdded: '2023-06-01' },
-  { id: 'c6', title: 'Advanced CSS and Sass', instructor: 'Alex Mercer', category: 'Web Dev', level: 'Advanced', rating: 4.8, reviews: 1500, duration: '4 weeks', price: 29.99, dateAdded: '2023-04-15' },
-  { id: 'c7', title: 'Digital Marketing Fundamentals', instructor: 'Emma Frost', category: 'Business', level: 'Beginner', rating: 4.4, reviews: 320, duration: '5 weeks', price: 39.99, dateAdded: '2023-07-10' },
-  { id: 'c8', title: 'Figma for UI Designers', instructor: 'Mia Wong', category: 'Design', level: 'Intermediate', rating: 4.9, reviews: 2100, duration: '6 weeks', price: 59.99, dateAdded: '2023-08-05' },
-];
-
-const CATEGORIES = ['Data Science', 'Web Dev', 'Design', 'Business'];
-const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Most Popular' },
   { value: 'newest', label: 'Newest' },
@@ -27,10 +13,17 @@ const SORT_OPTIONS = [
   { value: 'price_high', label: 'Price: High to Low' }
 ];
 
+const DEFAULT_CATEGORIES = ['Data Science', 'Web Dev', 'Design', 'Business'];
+const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+
 export const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   // State
+  const [courses, setCourses] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedLevels, setSelectedLevels] = useState([]);
@@ -38,24 +31,45 @@ export const Catalog = () => {
   const [sortBy, setSortBy] = useState('popular');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  // Fetch courses from API
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    apiFetch('/courses/')
+      .then(data => {
+        if (cancelled) return;
+        const list = (data && data.results) || data || [];
+        setCourses(list);
+        const cats = [...new Set(list.map(c => c.category).filter(Boolean))];
+        if (cats.length > 0) setCategories(cats);
+      })
+      .catch(err => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // Initialize from URL params
   useEffect(() => {
     const categoryParam = searchParams.get('category');
-    if (categoryParam && CATEGORIES.includes(categoryParam)) {
+    if (categoryParam) {
       setSelectedCategories([categoryParam]);
     }
   }, [searchParams]);
 
   // Filtering & Sorting Logic
   const filteredAndSortedCourses = useMemo(() => {
-    let result = [...MOCK_COURSES];
+    let result = [...courses];
 
     // Search filter
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter(c => 
         c.title.toLowerCase().includes(lowerQuery) || 
-        c.instructor.toLowerCase().includes(lowerQuery)
+        (c.instructorName || '').toLowerCase().includes(lowerQuery)
       );
     }
 
@@ -79,7 +93,7 @@ export const Catalog = () => {
     // Sorting
     switch (sortBy) {
       case 'newest':
-        result.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
+        result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         break;
       case 'price_low':
         result.sort((a, b) => a.price - b.price);
@@ -89,12 +103,12 @@ export const Catalog = () => {
         break;
       case 'popular':
       default:
-        result.sort((a, b) => b.reviews - a.reviews);
+        result.sort((a, b) => (b.reviews ?? 0) - (a.reviews ?? 0));
         break;
     }
 
     return result;
-  }, [searchQuery, selectedCategories, selectedLevels, priceFilter, sortBy]);
+  }, [courses, searchQuery, selectedCategories, selectedLevels, priceFilter, sortBy]);
 
   // Handlers
   const toggleCategory = (cat) => {
@@ -116,6 +130,24 @@ export const Catalog = () => {
     setPriceFilter('all');
     setSearchParams({});
   };
+
+  const loadingView = (
+    <div className="empty-state">
+      <div className="spinner" style={{ margin: '0 auto', width: '40px', height: '40px', border: '4px solid var(--color-surface-container-high)', borderTop: '4px solid var(--color-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+
+  const errorView = (
+    <div className="empty-state">
+      <SearchX size={48} />
+      <h3 className="headline-sm">Couldn't load courses</h3>
+      <p className="body-md">{error}</p>
+      <Button variant="primary" onClick={() => window.location.reload()} style={{ marginTop: 'var(--spacing-lg)' }}>
+        Retry
+      </Button>
+    </div>
+  );
 
   return (
     <div className="catalog-page">
@@ -152,7 +184,7 @@ export const Catalog = () => {
 
           <div className="filter-group">
             <h4 className="label-lg filter-title">Category</h4>
-            {CATEGORIES.map(cat => (
+            {categories.map(cat => (
               <label key={cat} className="filter-checkbox body-sm">
                 <input 
                   type="checkbox" 
@@ -216,7 +248,7 @@ export const Catalog = () => {
             
             <div className="sort-container">
               <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
-                Showing {filteredAndSortedCourses.length} results
+                Showing {loading ? '...' : filteredAndSortedCourses.length} results
               </span>
               <select 
                 className="sort-select body-sm"
@@ -231,7 +263,7 @@ export const Catalog = () => {
           </div>
 
           {/* Results Area */}
-          {filteredAndSortedCourses.length > 0 ? (
+          {loading ? loadingView : error ? errorView : filteredAndSortedCourses.length > 0 ? (
             <>
               <div className="catalog-grid">
                 {filteredAndSortedCourses.map(course => (
@@ -240,7 +272,7 @@ export const Catalog = () => {
               </div>
               
               <div className="catalog-pagination">
-                <Button variant="secondary">Load More</Button>
+                <Button variant="secondary" disabled>All courses loaded</Button>
               </div>
             </>
           ) : (

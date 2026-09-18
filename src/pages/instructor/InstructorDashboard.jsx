@@ -1,46 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, BookOpen, DollarSign, Plus, Edit2, PlayCircle, Settings } from 'lucide-react';
+import { Users, BookOpen, DollarSign, Plus, Edit2, PlayCircle, ClipboardList, UserCheck } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
+import { apiFetch } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import './InstructorDashboard.css';
-
-const MOCK_STATS = {
-  totalStudents: 1250,
-  activeCourses: 5,
-  totalRevenue: 15400
-};
-
-const MOCK_COURSES = [
-  {
-    id: 'c1',
-    title: 'Advanced Data Science with Python',
-    status: 'Published',
-    students: 450,
-    rating: 4.8,
-    thumbnail: 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&q=80&w=400'
-  },
-  {
-    id: 'c2',
-    title: 'Full-Stack React & Node.js',
-    status: 'Published',
-    students: 800,
-    rating: 4.9,
-    thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&q=80&w=400'
-  },
-  {
-    id: 'c4',
-    title: 'Introduction to Machine Learning',
-    status: 'Draft',
-    students: 0,
-    rating: 0,
-    thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=400'
-  }
-];
 
 export const InstructorDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/analytics/instructor/dashboard/')
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const summary = data?.summary || {};
+  const courses = data?.courses || [];
 
   return (
     <div className="instructor-dashboard">
@@ -48,7 +32,7 @@ export const InstructorDashboard = () => {
         <div>
           <h1 className="headline-lg">Instructor Dashboard</h1>
           <p className="body-lg" style={{ color: 'var(--color-on-surface-variant)', marginTop: 'var(--spacing-xs)' }}>
-            Welcome back, Professor. Here's an overview of your school.
+            Welcome back, {user?.fullName?.split(' ')[0] || 'Professor'}. Here's an overview of your courses.
           </p>
         </div>
         <Button variant="primary" onClick={() => navigate('/instructor/course/new')} style={{ gap: '8px' }}>
@@ -56,6 +40,10 @@ export const InstructorDashboard = () => {
         </Button>
       </div>
 
+      {loading ? (
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>Loading analytics...</p>
+      ) : (
+        <>
       {/* KPI Stats */}
       <div className="stats-grid">
         <Card className="stat-box">
@@ -64,7 +52,7 @@ export const InstructorDashboard = () => {
           </div>
           <div>
             <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Students</p>
-            <h3 className="headline-lg">{MOCK_STATS.totalStudents.toLocaleString()}</h3>
+            <h3 className="headline-lg">{(summary.totalStudents || 0).toLocaleString()}</h3>
           </div>
         </Card>
         <Card className="stat-box">
@@ -73,7 +61,7 @@ export const InstructorDashboard = () => {
           </div>
           <div>
             <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Active Courses</p>
-            <h3 className="headline-lg">{MOCK_STATS.activeCourses}</h3>
+            <h3 className="headline-lg">{summary.publishedCourses || 0}</h3>
           </div>
         </Card>
         <Card className="stat-box">
@@ -82,7 +70,16 @@ export const InstructorDashboard = () => {
           </div>
           <div>
             <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Revenue</p>
-            <h3 className="headline-lg">${MOCK_STATS.totalRevenue.toLocaleString()}</h3>
+            <h3 className="headline-lg">${Number(summary.totalRevenue || 0).toLocaleString()}</h3>
+          </div>
+        </Card>
+        <Card className="stat-box">
+          <div className="stat-icon-wrapper" style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }}>
+            <ClipboardList size={24} />
+          </div>
+          <div>
+            <p className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Total Lessons</p>
+            <h3 className="headline-lg">{summary.totalLessons || 0}</h3>
           </div>
         </Card>
       </div>
@@ -96,12 +93,8 @@ export const InstructorDashboard = () => {
             <span className="title-md">Grade Assignments</span>
           </Card>
           <Card className="quick-link-card" onClick={() => navigate('/instructor/attendance')}>
-            <Users size={24} style={{ color: '#059669' }} />
-            <span className="title-md">Mark Attendance</span>
-          </Card>
-          <Card className="quick-link-card">
-            <Settings size={24} style={{ color: 'var(--color-on-surface-variant)' }} />
-            <span className="title-md">Analytics Settings</span>
+            <UserCheck size={24} style={{ color: '#059669' }} />
+            <span className="title-md">View Attendance</span>
           </Card>
         </div>
       </section>
@@ -110,44 +103,58 @@ export const InstructorDashboard = () => {
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
           <h2 className="title-lg">My Courses</h2>
-          <Button variant="ghost">View All</Button>
         </div>
-        
+
         <div className="instructor-courses-list">
-          {MOCK_COURSES.map(course => (
-            <Card key={course.id} className="instructor-course-card">
-              <div className="course-card-content">
-                <img src={course.thumbnail} alt={course.title} className="instructor-course-thumb" />
-                <div className="instructor-course-info">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 className="title-lg">{course.title}</h3>
-                    {course.status === 'Published' ? (
-                      <Badge variant="primary">Published</Badge>
-                    ) : (
-                      <Badge variant="secondary">Draft</Badge>
-                    )}
-                  </div>
-                  
-                  <div className="course-meta-stats" style={{ display: 'flex', gap: 'var(--spacing-lg)', marginTop: 'var(--spacing-md)' }}>
-                    <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      <strong>{course.students}</strong> Students
-                    </span>
-                    <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
-                      <strong>{course.rating > 0 ? course.rating : 'N/A'}</strong> Rating
-                    </span>
+          {courses.length === 0 ? (
+            <p className="body-md" style={{ color: 'var(--color-on-surface-variant)', padding: 'var(--spacing-lg)' }}>
+              You haven't created any courses yet.
+            </p>
+          ) : (
+            courses.map(course => (
+              <Card key={course.courseId} className="instructor-course-card">
+                <div className="course-card-content">
+                  <div className="instructor-course-info" style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <h3 className="title-lg">{course.courseTitle}</h3>
+                      {course.published ? (
+                        <Badge variant="primary">Published</Badge>
+                      ) : (
+                        <Badge variant="secondary">Draft</Badge>
+                      )}
+                    </div>
+
+                    <div className="course-meta-stats" style={{ display: 'flex', gap: 'var(--spacing-lg)', marginTop: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+                      <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        <strong>{course.enrolledStudents}</strong> Students
+                      </span>
+                      <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        <strong>{course.rating != null ? Number(course.rating).toFixed(1) : 'N/A'}</strong> Rating
+                      </span>
+                      <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        <strong>{course.totalLessons}</strong> Lessons
+                      </span>
+                      {course.averageProgress != null && (
+                        <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                          <strong>{course.averageProgress}%</strong> Avg progress
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="course-actions">
-                <Button variant="secondary" onClick={() => navigate(`/instructor/course/${course.id}/edit`)} style={{ gap: '8px' }}>
-                  <Edit2 size={16} /> Edit Curriculum
-                </Button>
-              </div>
-            </Card>
-          ))}
+
+                <div className="course-actions">
+                  <Button variant="secondary" onClick={() => navigate(`/instructor/course/${course.courseId}/edit`)} style={{ gap: '8px' }}>
+                    <Edit2 size={16} /> Edit Curriculum
+                  </Button>
+                </div>
+              </Card>
+            ))
+          )}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 };

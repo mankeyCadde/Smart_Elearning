@@ -1,33 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Calendar, Download } from 'lucide-react';
+import { Award, Calendar } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { apiFetch } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import './Certificates.css';
 
-export const MOCK_CERTIFICATES = [
-  {
-    id: 'cert1',
-    courseName: 'Advanced Data Science with Python',
-    studentName: 'Alex Johnson',
-    issueDate: 'August 20, 2023',
-    certificateId: 'SML-2023-08-9921',
-    instructor: 'Bob Smith',
-    thumbnail: 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&q=80&w=400'
-  },
-  {
-    id: 'cert2',
-    courseName: 'HTML & CSS Fundamentals',
-    studentName: 'Alex Johnson',
-    issueDate: 'September 10, 2023',
-    certificateId: 'SML-2023-09-1102',
-    instructor: 'Sarah Jenkins',
-    thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=400'
-  }
-];
+const fmtIssueDate = (iso) => {
+  const d = iso ? new Date(iso) : new Date();
+  return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+};
 
 export const Certificates = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [certificates, setCertificates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/certificates/')
+      .then(data => {
+        if (cancelled) return;
+        setCertificates((data || []).map(cert => ({
+          id: cert.id,
+          courseName: cert.courseTitle,
+          studentName: cert.studentFullName || user?.fullName || 'Student',
+          issueDate: fmtIssueDate(cert.issuedAt),
+          certificateId: cert.certificateCode,
+          instructor: cert.instructorName || 'SmartLearn Team',
+        })));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   return (
     <div className="certificates-page">
@@ -39,7 +48,9 @@ export const Certificates = () => {
       </div>
 
       <div className="certificates-grid">
-        {MOCK_CERTIFICATES.length === 0 ? (
+        {loading ? (
+          <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>Loading certificates...</p>
+        ) : certificates.length === 0 ? (
           <div className="empty-state text-center" style={{ padding: 'var(--spacing-xxxl)', border: '1px dashed var(--color-outline-variant)', borderRadius: 'var(--rounded-lg)', gridColumn: '1 / -1' }}>
             <Award size={48} style={{ color: 'var(--color-outline)', margin: '0 auto var(--spacing-md)' }} />
             <p className="body-lg" style={{ color: 'var(--color-on-surface-variant)' }}>
@@ -47,9 +58,9 @@ export const Certificates = () => {
             </p>
           </div>
         ) : (
-          MOCK_CERTIFICATES.map(cert => (
+          certificates.map(cert => (
             <Card key={cert.id} className="certificate-card">
-              <div className="certificate-card-thumb" style={{ backgroundImage: `url(${cert.thumbnail})` }}>
+              <div className="certificate-card-thumb" style={{ backgroundImage: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
                 <div className="thumb-overlay">
                   <Award size={48} style={{ color: 'white' }} />
                 </div>
@@ -62,9 +73,6 @@ export const Certificates = () => {
                 <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <Button variant="primary" style={{ flex: 1 }} onClick={() => navigate(`/student/certificate/${cert.id}`)}>
                     View Details
-                  </Button>
-                  <Button variant="secondary" onClick={() => alert('Downloading PDF...')} title="Quick Download">
-                    <Download size={18} />
                   </Button>
                 </div>
               </div>

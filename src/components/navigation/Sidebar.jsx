@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { BookOpen, Home, CheckSquare, Award, BookMarked, ClipboardList, User, X } from 'lucide-react';
+import { BookOpen, Home, CheckSquare, Award, BookMarked, ClipboardList, User, X, Tag, Receipt, FileQuestion } from 'lucide-react';
 import './Sidebar.css';
 
 export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
@@ -10,6 +10,7 @@ export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
         return [
           { to: '/instructor/dashboard', label: 'Dashboard', icon: Home },
           { to: '/instructor/courses', label: 'My Courses', icon: BookOpen },
+          { to: '/instructor/quiz-builder', label: 'Quiz Builder', icon: FileQuestion },
           { to: '/instructor/assignments', label: 'Assignments', icon: CheckSquare },
           { to: '/instructor/attendance', label: 'Attendance', icon: ClipboardList },
         ];
@@ -18,6 +19,7 @@ export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
           { to: '/admin/dashboard', label: 'Dashboard', icon: Home },
           { to: '/admin/users', label: 'User Management', icon: User },
           { to: '/admin/courses', label: 'Course Management', icon: BookOpen },
+          { to: '/admin/coupons', label: 'Coupon Codes', icon: Tag },
         ];
       case 'STUDENT':
       default:
@@ -27,6 +29,7 @@ export const Sidebar = ({ role = 'STUDENT', isOpen, onClose }) => {
           { to: '/student/assignments', label: 'Assignments', icon: CheckSquare },
           { to: '/student/bookmarks', label: 'Bookmarks', icon: BookMarked },
           { to: '/student/certificates', label: 'Certificates', icon: Award },
+          { to: '/student/orders', label: 'My Orders', icon: Receipt },
         ];
     }
   };

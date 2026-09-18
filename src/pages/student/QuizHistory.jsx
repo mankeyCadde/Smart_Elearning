@@ -1,28 +1,71 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
-
-const MOCK_QUIZ_HISTORY = [
-  { id: 1, title: 'Module 1 Assessment: Python Basics', course: 'Advanced Data Science with Python', date: '2023-10-20', score: 85, passed: true },
-  { id: 2, title: 'Midterm Exam', course: 'Full-Stack React & Node.js', date: '2023-10-15', score: 92, passed: true },
-  { id: 3, title: 'Color Theory Quiz', course: 'UX/UI Design Principles', date: '2023-10-10', score: 60, passed: false },
-  { id: 4, title: 'Module 2 Assessment: Pandas', course: 'Advanced Data Science with Python', date: '2023-10-05', score: 100, passed: true },
-];
+import { apiFetch } from '../../services/api';
 
 export const QuizHistory = () => {
+  const navigate = useNavigate();
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch('/submissions/')
+      .then(data => { if (!cancelled) setHistory(data || []); })
+      .catch(err => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const columns = [
-    { header: 'Quiz Title', field: 'title', render: (row) => <strong style={{ color: 'var(--color-on-surface)' }}>{row.title}</strong> },
-    { header: 'Course', field: 'course' },
-    { header: 'Date Taken', field: 'date' },
-    { header: 'Score', field: 'score', render: (row) => <span>{row.score}%</span> },
-    { 
-      header: 'Status', 
-      field: 'passed',
+    {
+      header: 'Quiz Title',
+      field: 'quizTitle',
       render: (row) => (
-        row.passed 
-          ? <Badge variant="secondary">Passed</Badge> 
-          : <Badge variant="danger" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>Failed</Badge>
+        <strong style={{ color: 'var(--color-on-surface)', cursor: 'pointer' }} onClick={() => navigate(`/student/quiz/${row.quizId}`)}>
+          {row.quizTitle}
+        </strong>
       )
+    },
+    { header: 'Course', field: 'courseTitle' },
+    {
+      header: 'Date Taken',
+      field: 'date',
+      render: (row) => {
+        const raw = row.completedAt || row.startedAt;
+        return raw ? new Date(raw).toLocaleDateString() : '—';
+      }
+    },
+    {
+      header: 'Attempt',
+      field: 'attemptNumber',
+      render: (row) => <span>#{(row.attemptNumber || 1)}</span>
+    },
+    {
+      header: 'Score',
+      field: 'score',
+      render: (row) => (
+        row.score != null
+          ? <span>{row.score}%</span>
+          : <span style={{ color: 'var(--color-on-surface-variant)' }}>—</span>
+      )
+    },
+    {
+      header: 'Status',
+      field: 'status',
+      render: (row) => {
+        if (row.score != null) {
+          return row.score >= 50
+            ? <Badge variant="secondary">Passed</Badge>
+            : <Badge variant="danger" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>Not Passed</Badge>;
+        }
+        if (row.status === 'IN_PROGRESS') {
+          return <Badge variant="warning" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>In Progress</Badge>;
+        }
+        return <Badge variant="secondary">{row.status || 'Submitted'}</Badge>;
+      }
     }
   ];
 
@@ -35,9 +78,20 @@ export const QuizHistory = () => {
         </p>
       </div>
 
-      <section>
-        <Table columns={columns} data={MOCK_QUIZ_HISTORY} />
-      </section>
+      {loading ? (
+        <p className="body-md" style={{ color: 'var(--color-on-surface-variant)' }}>Loading quiz history...</p>
+      ) : error ? (
+        <p className="body-md" style={{ color: '#B91C1C' }}>{error}</p>
+      ) : (
+        <section>
+          <Table columns={columns} data={history} />
+          {history.length === 0 && (
+            <p className="body-md text-center" style={{ color: 'var(--color-on-surface-variant)', padding: 'var(--spacing-xl)' }}>
+              No quiz attempts yet.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 };

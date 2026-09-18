@@ -3,12 +3,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../context/AuthContext';
+import { ApiError } from '../../services/api';
 import './Auth.css';
+
+const ROLE_HOME = {
+  ADMIN: '/admin/dashboard',
+  INSTRUCTOR: '/instructor/dashboard',
+  STUDENT: '/student/dashboard',
+};
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors = {};
@@ -26,22 +37,29 @@ export const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validate()) {
-      // Mock login action
-      console.log('Logging in with:', formData);
-      
-      const emailLower = formData.email.toLowerCase();
-      
-      // Redirect based on email to simulate role-based authentication
-      if (emailLower.includes('admin')) {
-        navigate('/admin/dashboard');
-      } else if (emailLower.includes('instructor') || emailLower.includes('teacher')) {
-        navigate('/instructor/dashboard');
+    setServerError('');
+    if (!validate()) return;
+
+    setSubmitting(true);
+    try {
+      const user = await login(formData.email, formData.password);
+      navigate(ROLE_HOME[user.role] || '/student/dashboard');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.fields && typeof err.fields === 'object' && err.fields.email) {
+          setErrors({ email: err.fields.email[0] || 'Invalid email.' });
+        } else if (err.fields && err.fields.password) {
+          setErrors({ password: err.fields.password[0] || 'Invalid password.' });
+        } else {
+          setServerError(err.message);
+        }
       } else {
-        navigate('/student/dashboard');
+        setServerError('Something went wrong. Please try again.');
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,16 +69,14 @@ export const Login = () => {
         <div className="auth-header">
           <h1 className="headline-md auth-title">Welcome Back</h1>
           <p className="body-md auth-subtitle">Log in to continue learning.</p>
-          <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', fontSize: '12px', color: '#166534' }}>
-            <strong>Demo Accounts:</strong><br/>
-            Admin: admin@test.com<br/>
-            Instructor: teacher@test.com<br/>
-            Student: student@test.com<br/>
-            (Any password works)
-          </div>
         </div>
         
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {serverError && (
+            <div className="auth-server-error" role="alert">
+              {serverError}
+            </div>
+          )}
           <Input
             id="email"
             type="email"
@@ -88,8 +104,8 @@ export const Login = () => {
             <Link to="/forgot-password" className="auth-link body-sm">Forgot Password?</Link>
           </div>
           
-          <Button type="submit" variant="primary" className="auth-submit-btn">
-            Log In
+          <Button type="submit" variant="primary" className="auth-submit-btn" disabled={submitting}>
+            {submitting ? 'Logging in...' : 'Log In'}
           </Button>
           
           <div className="auth-footer body-sm">

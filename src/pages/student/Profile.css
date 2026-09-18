@@ -133,3 +133,24 @@
     width: 100%;
   }
 }
+
+.profile-avatar-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: white;
+  font-size: 36px;
+  font-weight: 600;
+}
+
+.badge-tile {
+  transition: transform 0.15s ease;
+}
+
+.badge-tile:hover {
+  transform: translateY(-2px);
+}

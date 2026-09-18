@@ -1,90 +1,92 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Table } from '../../components/ui/Table';
+import { Badge } from '../../components/ui/Badge';
+import { apiFetch } from '../../services/api';
 
-// Mock Roster Data for Instructor
-const INITIAL_ROSTER = [
-  { id: 's1', name: 'Alice Johnson', email: 'alice@example.com', status: 'present' },
-  { id: 's2', name: 'Bob Smith', email: 'bob@example.com', status: 'present' },
-  { id: 's3', name: 'Charlie Brown', email: 'charlie@example.com', status: 'absent' },
-  { id: 's4', name: 'Diana Prince', email: 'diana@example.com', status: 'late' },
-  { id: 's5', name: 'Evan Wright', email: 'evan@example.com', status: 'present' },
-];
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—';
 
 export const InstructorAttendance = () => {
-  const [roster, setRoster] = useState(INITIAL_ROSTER);
-  const [selectedCourse, setSelectedCourse] = useState('c1');
-  const [selectedDate, setSelectedDate] = useState('2023-10-30');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [rows, setRows] = useState([]);
+  const [courseTitle, setCourseTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleStatusChange = (studentId, newStatus) => {
-    setRoster(prev => prev.map(student => 
-      student.id === studentId ? { ...student, status: newStatus } : student
-    ));
-    setSaveSuccess(false); // reset success message on edit
+  useEffect(() => {
+    apiFetch('/instructor/courses/')
+      .then(data => {
+        const list = (data && (data.results ?? data)) || [];
+        setCourses(list);
+        setSelectedCourseId(prev => prev || list[0]?.id?.toString() || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadRoster = async () => {
+    if (!selectedCourseId || !selectedDate) return;
+    setLoading(true);
+    setError('');
+    try {
+      const [roster, attendance] = await Promise.all([
+        apiFetch(`/analytics/instructor/courses/${selectedCourseId}/students/`),
+        apiFetch(`/courses/${selectedCourseId}/attendance/?date=${selectedDate}`).catch(() => []),
+      ]);
+      setCourseTitle(roster.courseTitle || '');
+      const recordByStudent = {};
+      (attendance || []).forEach(a => { recordByStudent[a.studentId] = a; });
+      const combined = (roster.students || []).map(s => ({
+        id: s.studentId,
+        studentName: s.studentName,
+        studentEmail: s.studentEmail,
+        progress: s.progress,
+        attendanceSessions: s.attendanceSessions,
+        checkedInAt: recordByStudent[s.studentId]?.checkedInAt || null,
+        checkedOutAt: recordByStudent[s.studentId]?.checkedOutAt || null,
+        status: recordByStudent[s.studentId]?.checkedInAt ? 'present' : 'absent',
+      }));
+      setRows(combined);
+    } catch (err) {
+      setError(err.message || 'Failed to load attendance.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = () => {
-    setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    }, 1000);
-  };
+  useEffect(() => {
+    if (selectedCourseId && selectedDate) loadRoster();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCourseId, selectedDate]);
+
+  const presentCount = rows.filter(r => r.status === 'present').length;
+  const absentCount = rows.length - presentCount;
 
   const columns = [
-    { header: 'Student Name', field: 'name', render: (row) => <span style={{ fontWeight: 500 }}>{row.name}</span> },
-    { header: 'Email', field: 'email' },
-    { 
-      header: 'Mark Attendance', 
+    { header: 'Student Name', field: 'studentName', render: (row) => <span style={{ fontWeight: 500 }}>{row.studentName}</span> },
+    { header: 'Email', field: 'studentEmail' },
+    {
+      header: 'Status',
       field: 'status',
       render: (row) => (
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }} className="body-sm">
-            <input 
-              type="radio" 
-              name={`status-${row.id}`} 
-              checked={row.status === 'present'} 
-              onChange={() => handleStatusChange(row.id, 'present')} 
-              style={{ accentColor: 'var(--color-secondary)' }}
-            />
-            Present
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }} className="body-sm">
-            <input 
-              type="radio" 
-              name={`status-${row.id}`} 
-              checked={row.status === 'late'} 
-              onChange={() => handleStatusChange(row.id, 'late')} 
-              style={{ accentColor: '#D97706' }}
-            />
-            Late
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }} className="body-sm">
-            <input 
-              type="radio" 
-              name={`status-${row.id}`} 
-              checked={row.status === 'absent'} 
-              onChange={() => handleStatusChange(row.id, 'absent')} 
-              style={{ accentColor: '#DC2626' }}
-            />
-            Absent
-          </label>
-        </div>
+        row.status === 'present'
+          ? <Badge variant="secondary">Present</Badge>
+          : <Badge variant="danger" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>Absent</Badge>
       )
-    }
+    },
+    { header: 'Check In', field: 'checkedInAt', render: (row) => fmtTime(row.checkedInAt) },
+    { header: 'Check Out', field: 'checkedOutAt', render: (row) => fmtTime(row.checkedOutAt) },
+    { header: '%', field: 'progress', render: (row) => `${row.progress}%` },
   ];
 
   return (
     <div className="instructor-attendance-page">
       <div className="dashboard-header-section" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <h1 className="headline-lg">Manage Attendance</h1>
+        <h1 className="headline-lg">Course Attendance</h1>
         <p className="body-lg" style={{ color: 'var(--color-on-surface-variant)' }}>
-          Record student attendance for live sessions.
+          Review attendance for live sessions.
         </p>
       </div>
 
@@ -92,46 +94,48 @@ export const InstructorAttendance = () => {
         <div style={{ display: 'flex', gap: 'var(--spacing-lg)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)', flex: 1, minWidth: '200px' }}>
             <label className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Select Course</label>
-            <select 
-              className="body-md" 
-              value={selectedCourse} 
-              onChange={(e) => setSelectedCourse(e.target.value)}
+            <select
+              className="body-md"
+              value={selectedCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-outline-variant)', backgroundColor: 'var(--color-surface-container-lowest)' }}
             >
-              <option value="c1">Advanced Data Science with Python</option>
-              <option value="c2">Full-Stack React & Node.js</option>
+              {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
             </select>
           </div>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)', flex: 1, minWidth: '200px' }}>
             <label className="label-sm" style={{ color: 'var(--color-on-surface-variant)' }}>Session Date</label>
-            <input 
-              type="date" 
-              className="body-md" 
-              value={selectedDate} 
+            <input
+              type="date"
+              className="body-md"
+              value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-outline-variant)', backgroundColor: 'var(--color-surface-container-lowest)' }}
             />
           </div>
 
-          <Button variant="secondary" style={{ height: '40px' }}>Load Roster</Button>
+          <Button variant="secondary" style={{ height: '40px' }} onClick={loadRoster} disabled={loading}>
+            {loading ? 'Loading...' : 'Load Roster'}
+          </Button>
         </div>
+        {error && <p className="body-sm" style={{ color: '#B91C1C', marginTop: 'var(--spacing-sm)' }}>{error}</p>}
       </Card>
 
       <section>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
-          <h2 className="title-lg">Class Roster</h2>
-          <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>{roster.length} Students</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)', flexWrap: 'wrap', gap: 'var(--spacing-md)' }}>
+          <div>
+            <h2 className="title-lg">Class Roster</h2>
+            <p className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+              {courseTitle} · {new Date(selectedDate).toLocaleDateString()}
+            </p>
+          </div>
+          <span className="body-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+            {rows.length} students · <strong style={{ color: 'var(--color-secondary)' }}>{presentCount} present</strong> · <strong style={{ color: '#DC2626' }}>{absentCount} absent</strong>
+          </span>
         </div>
-        
-        <Table columns={columns} data={roster} />
-        
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-xl)' }}>
-          {saveSuccess && <span className="body-sm" style={{ color: 'var(--color-secondary)' }}>Attendance saved successfully!</span>}
-          <Button variant="primary" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Attendance'}
-          </Button>
-        </div>
+
+        <Table columns={columns} data={rows} />
       </section>
     </div>
   );
