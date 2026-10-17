@@ -36,3 +36,21 @@ backend/**/__pycache__/
 .env
 .env.local
 .env.production
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local databases and exported data
+*.sqlite3
+*.sqlite3.backup
+sqlite_data.json
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Django generated files
+backend/staticfiles/
