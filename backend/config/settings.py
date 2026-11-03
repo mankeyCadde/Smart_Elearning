@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
-import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -142,30 +141,15 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ---------------------------------------------------------------------------
-# Database — Neon PostgreSQL or local SQLite
+# Database — SQLite only
 # ---------------------------------------------------------------------------
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if DATABASE_URL:
-    # Production (and opt-in local Postgres): fully driven by DATABASE_URL.
-    # conn_max_age=0 disables persistent connections (recommended when using a
-    # PgBouncer-style transaction pooler such as Neon's "-pooler" endpoint).
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "600")),
-            conn_health_checks=True,
-        )
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
-else:
-    # Local development fallback: no DATABASE_URL -> SQLite file.
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 # ---------------------------------------------------------------------------
 # Custom User Model

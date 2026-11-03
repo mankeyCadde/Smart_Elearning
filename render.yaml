@@ -1,19 +1,18 @@
 # Render Blueprint for the Smart Elearning Platform.
 #
 # Deploy with: Render Dashboard -> Blueprints -> New Blueprint Instance.
-# This provisions a managed PostgreSQL database, the Django API (rootDir:
-# backend) and the React frontend as a static site.
+# This provisions the Django API (rootDir: backend) and the React frontend as
+# a static site. The database is the local SQLite file backend/db.sqlite3; no
+# managed database is provisioned.
+#
+# WARNING: Render free web services have ephemeral filesystems. SQLite data in
+# backend/db.sqlite3 is lost on redeploy/restart. Use a paid persistent disk or
+# a deliberate SQLite backup/restore strategy before treating it as durable.
 #
 # NOTE: the *.onrender.com names below are fixed by this file. If a name is
 # already taken globally, Render will pick a different URL and you must update
 # DJANGO_ALLOWED_HOSTS, DJANGO_CORS_ALLOWED_ORIGINS, DJANGO_CSRF_TRUSTED_ORIGINS
 # and FRONTEND_BASE_URL (and VITE_API_URL) to match.
-
-databases:
-  - name: smartlearn-db
-    plan: free
-    databaseName: smartlearn
-    user: smartlearn
 
 services:
   # ---------------------------------------------------------------------------
@@ -37,10 +36,6 @@ services:
         value: "False"
       - key: DJANGO_SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: smartlearn-db
-          property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
         value: smartlearn-api.onrender.com
       - key: DJANGO_CORS_ALLOWED_ORIGINS
