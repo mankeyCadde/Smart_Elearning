@@ -1,4 +1,5 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '');
+const FALLBACK_API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || FALLBACK_API_BASE).replace(/\/$/, '');
 
 const ACCESS_KEY = 'sl_access';
 const REFRESH_KEY = 'sl_refresh';
@@ -119,6 +120,48 @@ export async function apiFetch(endpoint, options = {}) {
   }
 
   return data;
+}
+
+export async function apiDownload(endpoint, filename = 'download') {
+  const request = async (retried = false) => {
+    const token = getAccessToken();
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${endpoint}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {
+      throw new ApiError('Network error. Is the server running?');
+    }
+
+    if (res.status === 401 && !retried) {
+      const newAccess = await refreshAccessToken();
+      if (newAccess) return request(true);
+      clearTokens();
+      throw new ApiError('Your session has expired. Please log in again.', 401);
+    }
+
+    if (!res.ok) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      throw new ApiError(extractMessage(data), res.status, data);
+    }
+    return res.blob();
+  };
+
+  const blob = await request();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export { API_BASE };

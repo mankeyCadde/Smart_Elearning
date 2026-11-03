@@ -1,6 +1,8 @@
 from decimal import Decimal
+import os
 
 from django.db.models import Count, Max, Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -10,6 +12,8 @@ from rest_framework.views import APIView
 
 from users.permissions import IsAdmin, IsInstructor
 
+from learning.access import accepted_enrollment_or_403
+from learning.models import Enrollment
 from notifications.services import notify
 
 from .models import (
@@ -54,7 +58,9 @@ def _enrolled_quiz_qs(user):
     """Quizzes of courses the student is enrolled in, published and not past due."""
     return (
         Quiz.objects.filter(
-            course__enrollments__student=user, published=True
+            course__enrollments__student=user,
+            course__enrollments__status=Enrollment.Status.ACCEPTED,
+            published=True,
         )
         .filter(Q(dueDate__isnull=True) | Q(dueDate__gte=timezone.now()))
         .annotate(
@@ -279,9 +285,11 @@ class QuizSubmitView(APIView):
 
     def post(self, request, pk):
         quiz = get_object_or_404(
-            Quiz, pk=pk, published=True,
-            course__enrollments__student=request.user,
+            Quiz.objects.select_related("course"),
+            pk=pk,
+            published=True,
         )
+        accepted_enrollment_or_403(request.user, quiz.course)
         submission = get_object_or_404(
             Submission,
             student=request.user,
@@ -517,6 +525,7 @@ class AssignmentListView(APIView):
             Assignment.objects.filter(
                 published=True,
                 course__enrollments__student=user,
+                course__enrollments__status=Enrollment.Status.ACCEPTED,
             )
             .select_related("course", "course__instructor")
             .annotate(_submissions_count=Count("submissions"))
@@ -527,6 +536,9 @@ class AssignmentListView(APIView):
             s.assignment_id: s
             for s in AssignmentSubmission.objects.filter(
                 assignment__course__enrollments__student=user,
+                assignment__course__enrollments__status=(
+                    Enrollment.Status.ACCEPTED
+                ),
                 student=user,
             ).select_related("assignment")
         }
@@ -614,6 +626,45 @@ class AssignmentDetailView(APIView):
             AssignmentSubmissionSerializer(submission).data,
             status=201 if created else 200,
         )
+
+
+class AssignmentSubmissionDownloadView(APIView):
+    """Download an assignment file with ownership/course authorization."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        submission = get_object_or_404(
+            AssignmentSubmission.objects.select_related(
+                "assignment", "assignment__course"
+            ),
+            pk=pk,
+        )
+        user = request.user
+        allowed = (
+            user.is_admin
+            or submission.student_id == user.id
+            or (
+                user.is_instructor
+                and submission.assignment.course.instructor_id == user.id
+            )
+        )
+        if not allowed:
+            raise PermissionDenied(
+                "You do not have permission to download this submission."
+            )
+        if not submission.file:
+            raise Http404("This submission has no file.")
+
+        filename = os.path.basename(submission.file.name)
+        response = FileResponse(
+            submission.file.open("rb"),
+            as_attachment=True,
+            filename=filename,
+            content_type="application/octet-stream",
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 class InstructorAssignmentListView(APIView):

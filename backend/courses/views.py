@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
+from learning.access import accepted_enrollment_or_403
 from learning.models import Bookmark, Enrollment, LessonProgress, Note
 from notifications.services import notify
 from users.permissions import IsAdmin, IsInstructor
@@ -156,13 +157,7 @@ class CourseContentView(APIView):
         ):
             enrollment = None
         else:
-            enrollment = Enrollment.objects.filter(
-                student=user, course=course
-            ).first()
-            if not enrollment:
-                raise PermissionDenied(
-                    "Enroll in this course to access its content."
-                )
+            enrollment = accepted_enrollment_or_403(user, course)
 
         sections = course.sections.prefetch_related("lessons")
         progress_map = {}

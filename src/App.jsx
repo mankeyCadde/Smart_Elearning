@@ -67,12 +67,12 @@ function App() {
         </Route>
 
         {/* Video Learning Route (Full screen, no layout wrapping) */}
-        <Route path="/student/course/:id/video" element={<RequireRole />}>
+        <Route path="/student/course/:id/video" element={<RequireRole role="STUDENT" />}>
           <Route index element={<VideoLearning />} />
         </Route>
         
         {/* Quiz Route (Full screen, no layout wrapping) */}
-        <Route path="/student/quiz/:id" element={<RequireRole />}>
+        <Route path="/student/quiz/:id" element={<RequireRole role="STUDENT" />}>
           <Route index element={<StudentQuiz />} />
         </Route>
 

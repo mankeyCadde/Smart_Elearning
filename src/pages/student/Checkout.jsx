@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from '../../services/api';
 import './Checkout.css';
 
 const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const PAYMENTS_AVAILABLE = import.meta.env.DEV;
 
 export const Checkout = () => {
   const { id } = useParams();
@@ -86,6 +87,20 @@ export const Checkout = () => {
 
   if (loading) {
     return <div className="checkout-page"><p className="body-md">Loading checkout...</p></div>;
+  }
+
+  if (!PAYMENTS_AVAILABLE) {
+    return (
+      <div className="checkout-page">
+        <Card className="checkout-success-card">
+          <h1 className="headline-md" style={{ marginBottom: 'var(--spacing-sm)' }}>Paid checkout unavailable</h1>
+          <p className="body-md" style={{ color: 'var(--color-on-surface-variant)', marginBottom: 'var(--spacing-xl)' }}>
+            Paid courses are temporarily unavailable until a verified payment provider is configured.
+          </p>
+          <Button variant="primary" onClick={() => navigate(`/course/${id}`)}>Back to Course</Button>
+        </Card>
+      </div>
+    );
   }
 
   if (complete) {

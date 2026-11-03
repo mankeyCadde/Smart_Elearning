@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from courses.models import Course, Lesson
-from learning.models import Enrollment
+from learning.access import has_accepted_enrollment
 from notifications.services import notify
 from users.permissions import IsAdmin, IsInstructor
 
@@ -27,9 +27,7 @@ def _can_access(user, lesson):
         return False
     if user.is_instructor and course.instructor_id == user.id:
         return True
-    return Enrollment.objects.filter(
-        student=user, course=course
-    ).exists()
+    return has_accepted_enrollment(user, course)
 
 
 def _can_post(user, lesson):
@@ -40,9 +38,7 @@ def _can_post(user, lesson):
         return False
     if user.is_instructor and course.instructor_id == user.id:
         return True
-    return Enrollment.objects.filter(
-        student=user, course=course
-    ).exists()
+    return has_accepted_enrollment(user, course)
 
 
 def _get_allowed_lesson(pk, user):

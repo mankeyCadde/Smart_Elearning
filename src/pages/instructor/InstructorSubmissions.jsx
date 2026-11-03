@@ -6,12 +6,7 @@ import { Table } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
-import { apiFetch, ApiError, API_BASE } from '../../services/api';
-
-const suffixUrl = (url) => {
-  if (!url) return url;
-  return url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
-};
+import { apiFetch, apiDownload, ApiError } from '../../services/api';
 
 export const InstructorSubmissions = () => {
   const { id } = useParams();
@@ -74,6 +69,15 @@ export const InstructorSubmissions = () => {
     }
   };
 
+  const handleDownload = async (submission) => {
+    if (!submission.file) return;
+    try {
+      await apiDownload(submission.file, `submission-${submission.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to download submission.');
+    }
+  };
+
   const columns = [
     { header: 'Student Name', field: 'studentName', render: (row) => <strong style={{ color: 'var(--color-on-surface)' }}>{row.studentName}</strong> },
     {
@@ -96,9 +100,9 @@ export const InstructorSubmissions = () => {
       render: (row) => {
         if (row.file) {
           return (
-            <a href={suffixUrl(row.file)} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'none' }}>
+            <button type="button" onClick={() => handleDownload(row)} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-primary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
               <FileText size={14} /> <Download size={14} /> View File
-            </a>
+            </button>
           );
         }
         if (row.content) return <span style={{ maxWidth: '240px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.content}</span>;

@@ -6,7 +6,6 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Tabs } from '../../components/ui/Tabs';
 import { Accordion, AccordionItem } from '../../components/ui/Accordion';
-import { Modal } from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch, ApiError } from '../../services/api';
 import './CourseDetails.css';
@@ -86,6 +85,10 @@ export const CourseDetails = () => {
       return;
     }
     if (user.role !== 'STUDENT') return;
+    if (Number(course.price) > 0) {
+      navigate(`/student/checkout/${course.id}`);
+      return;
+    }
     requestEnrollment();
   };
 
@@ -310,12 +313,16 @@ export const CourseDetails = () => {
                           ? 'Requesting...'
                           : !user 
                             ? 'Log in to Enroll' 
-                            : 'Request Enrollment'}
+                            : Number(course.price) > 0
+                              ? 'Purchase Course'
+                              : 'Request Enrollment'}
                 </Button>
               )}
               {(enrollState !== 'ACCEPTED' && !isEnrolled) && (
                 <p className="body-sm text-center" style={{ margin: 'var(--spacing-sm) 0 var(--spacing-lg)' }}>
-                  Enrollment requires instructor approval.
+                  {Number(course.price) > 0
+                    ? 'Paid courses require checkout and a verified payment.'
+                    : 'Enrollment requires instructor approval.'}
                 </p>
               )}
               

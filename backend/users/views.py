@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db.models import Q
@@ -161,12 +162,12 @@ class ForgotPasswordView(APIView):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         link = (
-            f"{request.scheme}://localhost:5173/reset-password?uid={uid}&token={token}"
+            f"{settings.FRONTEND_BASE_URL}/reset-password?uid={uid}&token={token}"
         )
         send_mail(
             "Reset your SmartLearn password",
             f"Follow this link to reset your password:\n\n{link}",
-            "noreply@smartlearn.local",
+            settings.DEFAULT_FROM_EMAIL,
             [user.email],
         )
         return Response({"detail": "If that email exists, a reset link has been sent."})

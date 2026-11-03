@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.validators import FileExtensionValidator
 from django.db.models import Count, Sum
 from rest_framework import serializers
 
@@ -400,6 +402,31 @@ class QuizSubmitSerializer(serializers.Serializer):
 # ── Assignments ───────────────────────────────────────────────────────────────
 
 
+def submission_file_url(submission):
+    if not submission.file:
+        return None
+    return f"/assignment-submissions/{submission.pk}/file/"
+
+
+def validate_assignment_file_size(file):
+    if file.size > settings.ASSIGNMENT_MAX_UPLOAD_BYTES:
+        max_mb = settings.ASSIGNMENT_MAX_UPLOAD_BYTES / (1024 * 1024)
+        raise serializers.ValidationError(
+            f"File size cannot exceed {max_mb:g} MB."
+        )
+
+
+def validate_assignment_content_type(file):
+    content_type = (getattr(file, "content_type", "") or "").lower()
+    if (
+        content_type
+        and content_type not in settings.ASSIGNMENT_ALLOWED_CONTENT_TYPES
+    ):
+        raise serializers.ValidationError(
+            "This file type is not allowed for assignment submissions."
+        )
+
+
 class AssignmentListSerializer(serializers.ModelSerializer):
     courseId = serializers.IntegerField(source="course_id", read_only=True)
     courseTitle = serializers.CharField(source="course.title", read_only=True)
@@ -433,9 +460,7 @@ class AssignmentListSerializer(serializers.ModelSerializer):
         return {
             "id": submission.id,
             "content": submission.content,
-            "file": (
-                submission.file.url if submission.file else None
-            ),
+            "file": submission_file_url(submission),
             "submittedAt": submission.submittedAt.isoformat(),
             "grade": (
                 str(submission.grade) if submission.grade is not None else None
@@ -495,6 +520,7 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     studentEmail = serializers.CharField(
         source="student.email", read_only=True
     )
+    file = serializers.SerializerMethodField()
 
     class Meta:
         model = AssignmentSubmission
@@ -513,6 +539,9 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
             "gradedAt",
         ]
 
+    def get_file(self, obj):
+        return submission_file_url(obj)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["status"] = (
@@ -523,7 +552,16 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
 
 class AssignmentSubmitSerializer(serializers.Serializer):
     content = serializers.CharField(required=False, allow_blank=True)
-    file = serializers.FileField(required=False)
+    file = serializers.FileField(
+        required=False,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=settings.ASSIGNMENT_ALLOWED_FILE_EXTENSIONS
+            ),
+            validate_assignment_file_size,
+            validate_assignment_content_type,
+        ],
+    )
 
 
 class AssignmentGradeSerializer(serializers.Serializer):

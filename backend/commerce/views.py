@@ -1,9 +1,10 @@
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -25,6 +26,14 @@ def _get_coupon(code):
     return Coupon.objects.select_related("course").filter(
         code=(code or "").strip().upper()
     ).first()
+
+
+class PaymentsUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = (
+        "Paid checkout is not configured. Paid courses are temporarily "
+        "unavailable until a verified payment provider is enabled."
+    )
 
 
 # ── Student-facing ───────────────────────────────────────────────────────────
@@ -60,11 +69,11 @@ class CouponValidateView(APIView):
 
 
 class OrderCreateView(APIView):
-    """POST {courseId, couponCode?}: pay for and enroll in a published course.
+    """POST {courseId, couponCode?}: complete a paid-course purchase.
 
-    Simulates a (mock) payment: on success the order is marked COMPLETED and
-    the student is enrolled. The price recorded on the enrollment is the net
-    amount paid (after any coupon discount).
+    Production checkout is disabled until a verified payment provider and
+    webhook are configured. The development-only demo path may simulate a
+    successful payment when PAYMENTS_DEMO_MODE is enabled.
     """
 
     permission_classes = [IsAuthenticated]
@@ -78,6 +87,12 @@ class OrderCreateView(APIView):
             pk=serializer.validated_data["courseId"],
             published=True,
         )
+        if course.price <= 0:
+            raise ValidationError(
+                {"detail": "Free courses do not require checkout."}
+            )
+        if not settings.PAYMENTS_DEMO_MODE:
+            raise PaymentsUnavailable()
         if request.user.enrollments.filter(course=course).exists():
             raise ValidationError(
                 {"detail": "You are already enrolled in this course."}
@@ -106,7 +121,10 @@ class OrderCreateView(APIView):
             status=Order.Status.COMPLETED,
         )
         Enrollment.objects.create(
-            student=request.user, course=course, price=total
+            student=request.user,
+            course=course,
+            price=total,
+            status=Enrollment.Status.ACCEPTED,
         )
         from notifications.services import notify
 

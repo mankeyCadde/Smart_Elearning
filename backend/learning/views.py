@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from courses.models import Course, Lesson
 from users.permissions import IsAdmin, IsInstructor
 
+from .access import accepted_enrollment_or_403
 from .models import (
     Attendance,
     Bookmark,
@@ -80,6 +81,15 @@ class EnrollView(APIView):
         if request.user.enrollments.filter(course=course).exists():
             raise ValidationError(
                 {"detail": "You are already enrolled in this course."}
+            )
+        if course.price > 0:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Paid courses require checkout and a verified payment. "
+                        "Enrollment requests are only available for free courses."
+                    )
+                }
             )
         enrollment = Enrollment.objects.create(
             student=request.user, course=course, price=course.price
@@ -201,13 +211,9 @@ class LessonProgressView(APIView):
 
     def patch(self, request, lesson_id):
         lesson = get_object_or_404(Lesson, pk=lesson_id)
-        enrollment = Enrollment.objects.filter(
-            student=request.user, course=lesson.section.course, status="ACCEPTED"
-        ).first()
-        if not enrollment:
-            raise PermissionDenied(
-                "You must be enrolled in this course to track progress."
-            )
+        enrollment = accepted_enrollment_or_403(
+            request.user, lesson.section.course
+        )
 
         serializer = LessonProgressUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -325,8 +331,10 @@ class NoteListView(APIView):
         serializer = NoteCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lesson = get_object_or_404(
-            Lesson, pk=serializer.validated_data["lessonId"]
+            Lesson.objects.select_related("section", "section__course"),
+            pk=serializer.validated_data["lessonId"],
         )
+        accepted_enrollment_or_403(request.user, lesson.section.course)
         note = Note.objects.create(
             student=request.user,
             lesson=lesson,
@@ -390,8 +398,10 @@ class BookmarkListView(APIView):
         serializer = BookmarkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lesson = get_object_or_404(
-            Lesson, pk=serializer.validated_data["lessonId"]
+            Lesson.objects.select_related("section", "section__course"),
+            pk=serializer.validated_data["lessonId"],
         )
+        accepted_enrollment_or_403(request.user, lesson.section.course)
         bookmark, created = Bookmark.objects.get_or_create(
             student=request.user, lesson=lesson
         )

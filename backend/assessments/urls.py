@@ -16,4 +16,9 @@ urlpatterns = [
     # ── Assignments (student) ─────────────────────────────────────────────
     path("assignments/", views.AssignmentListView.as_view(), name="assignment-list"),
     path("assignments/<int:pk>/", views.AssignmentDetailView.as_view(), name="assignment-detail"),
+    path(
+        "assignment-submissions/<int:pk>/file/",
+        views.AssignmentSubmissionDownloadView.as_view(),
+        name="assignment-submission-file",
+    ),
 ]

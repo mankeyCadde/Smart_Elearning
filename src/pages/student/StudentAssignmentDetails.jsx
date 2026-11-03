@@ -4,12 +4,7 @@ import { Upload, ChevronLeft, CheckCircle, File, Download, X } from 'lucide-reac
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { apiFetch, ApiError, API_BASE } from '../../services/api';
-
-const suffixUrl = (url) => {
-  if (!url) return url;
-  return url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
-};
+import { apiFetch, apiDownload, ApiError } from '../../services/api';
 
 const formatDue = (d) => {
   if (!d) return '';
@@ -75,6 +70,16 @@ export const StudentAssignmentDetails = () => {
       setSubmitError(err instanceof ApiError ? err.message : 'Failed to submit assignment.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    const file = assignment?.mySubmission?.file;
+    if (!file) return;
+    try {
+      await apiDownload(file, `submission-${assignment.id}`);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to download submission.');
     }
   };
 
@@ -222,11 +227,9 @@ export const StudentAssignmentDetails = () => {
                   </Button>
                 )}
                 {sub.file && (
-                  <a href={suffixUrl(sub.file)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                    <Button variant="secondary" style={{ width: '100%', marginTop: 'var(--spacing-sm)', gap: '8px' }}>
-                      <Download size={16} /> Download Submission
-                    </Button>
-                  </a>
+                  <Button variant="secondary" style={{ width: '100%', marginTop: 'var(--spacing-sm)', gap: '8px' }} onClick={handleDownload}>
+                    <Download size={16} /> Download Submission
+                  </Button>
                 )}
               </div>
             )}

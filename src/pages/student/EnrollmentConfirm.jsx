@@ -30,6 +30,10 @@ export const EnrollmentConfirm = () => {
 
   const confirmEnroll = async () => {
     if (!courseId) return;
+    if (Number(course?.price) > 0) {
+      navigate(`/student/checkout/${courseId}`);
+      return;
+    }
     setEnrolling(true);
     try {
       await apiFetch('/enrollments/', { method: 'POST', body: { courseId: Number(courseId) } });
@@ -96,7 +100,7 @@ export const EnrollmentConfirm = () => {
         <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
           <Button variant="ghost" style={{ flex: 1 }} onClick={() => navigate(`/course/${course.id}`)}>Cancel</Button>
           <Button variant="primary" style={{ flex: 1 }} onClick={confirmEnroll} disabled={enrolling}>
-            {enrolling ? (<><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enrolling...</>) : 'Confirm & Enroll'}
+            {enrolling ? (<><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enrolling...</>) : Number(course.price) > 0 ? 'Continue to Checkout' : 'Confirm & Enroll'}
           </Button>
         </div>
         {error && <p className="body-sm" style={{ color: '#DC2626', marginTop: 'var(--spacing-md)', textAlign: 'center' }}>{error}</p>}
@@ -104,7 +108,11 @@ export const EnrollmentConfirm = () => {
 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--spacing-lg)', color: 'var(--color-on-surface-variant)' }}>
         <CheckCircle size={16} color="var(--color-primary)" />
-        <p className="body-sm">Free courses enroll instantly. Paid courses go through checkout.</p>
+        <p className="body-sm">
+          {Number(course.price) > 0
+            ? 'Paid courses require checkout and a verified payment.'
+            : 'Free courses require instructor approval.'}
+        </p>
       </div>
     </div>
   );

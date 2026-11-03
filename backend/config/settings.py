@@ -8,23 +8,65 @@ from pathlib import Path
 from datetime import timedelta
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load a local, git-ignored .env if present. In production, configuration is
+# supplied through real environment variables (e.g. Render's dashboard), which
+# always take precedence because load_dotenv does not override existing values.
+load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(name, default=False):
+    """Return a boolean from an environment variable (accepts 1/true/yes/on)."""
+    return os.environ.get(name, str(default)).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _env_list(name, default=""):
+    """Return a comma-separated environment variable as a clean list."""
+    return [
+        item.strip()
+        for item in os.environ.get(name, default).split(",")
+        if item.strip()
+    ]
+
 
 # ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-0ujl9nqv((rl*av-u5i*$$itjkubr0tc@c261ux_x#5+op&vc7",
-)
+# Safe production default: DEBUG must be explicitly enabled for local work.
+DEBUG = _env_bool("DJANGO_DEBUG", False)
 
-DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
+# SECRET_KEY must be supplied externally in production. A clearly-marked,
+# development-only fallback is used solely when DEBUG is enabled.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-local-dev-only-do-not-use-in-production"
+    else:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY must be set to a strong, unique value in production."
+        )
 
-_hosts = os.environ.get("DJANGO_ALLOWED_HOSTS", "*")
-ALLOWED_HOSTS = [h.strip() for h in _hosts.split(",") if h.strip()]
+# Explicit hostnames only. Wildcards are never used as a production fallback.
+ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS")
+if not ALLOWED_HOSTS:
+    if DEBUG:
+        ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+    else:
+        raise ImproperlyConfigured(
+            "DJANGO_ALLOWED_HOSTS must be set to a comma-separated list of "
+            "explicit production hostnames (e.g. api.example.com)."
+        )
 
 # ---------------------------------------------------------------------------
 # Installed apps
@@ -66,6 +108,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -105,13 +148,18 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
+    # Production (and opt-in local Postgres): fully driven by DATABASE_URL.
+    # conn_max_age=0 disables persistent connections (recommended when using a
+    # PgBouncer-style transaction pooler such as Neon's "-pooler" endpoint).
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
+            conn_max_age=int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "600")),
+            conn_health_checks=True,
         )
     }
 else:
+    # Local development fallback: no DATABASE_URL -> SQLite file.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -172,12 +220,75 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# WhiteNoise serves collected static files directly from the WSGI app, which is
+# what makes the Django admin usable in production without a separate web server
+# or CDN. CompressedManifestStaticFilesStorage adds cache-busting filenames and
+# gzip/brotli compression.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Media files
 # ---------------------------------------------------------------------------
 
 MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+_media_root = os.environ.get("DJANGO_MEDIA_ROOT", "").strip()
+MEDIA_ROOT = (
+    Path(_media_root).expanduser() if _media_root else BASE_DIR / "media"
+)
+
+_media_storage_backend = os.environ.get(
+    "DJANGO_MEDIA_STORAGE_BACKEND", ""
+).strip()
+if _media_storage_backend:
+    STORAGES["default"] = {"BACKEND": _media_storage_backend}
+
+AWS_STORAGE_BUCKET_NAME = os.environ.get(
+    "AWS_STORAGE_BUCKET_NAME", ""
+).strip()
+AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "").strip()
+AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", "").strip()
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+AWS_QUERYSTRING_AUTH = True
+AWS_DEFAULT_ACL = None
+AWS_S3_FILE_OVERWRITE = False
+
+FILE_UPLOAD_PERMISSIONS = 0o600
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
+
+ASSIGNMENT_MAX_UPLOAD_BYTES = int(
+    os.environ.get("ASSIGNMENT_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))
+)
+ASSIGNMENT_ALLOWED_FILE_EXTENSIONS = _env_list(
+    "ASSIGNMENT_ALLOWED_FILE_EXTENSIONS",
+    (
+        "pdf,doc,docx,ppt,pptx,xls,xlsx,csv,txt,rtf,odt,ods,odp,"
+        "zip,png,jpg,jpeg,gif,webp"
+    ),
+)
+ASSIGNMENT_ALLOWED_CONTENT_TYPES = _env_list(
+    "ASSIGNMENT_ALLOWED_CONTENT_TYPES",
+    (
+        "application/pdf,application/msword,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "application/vnd.ms-powerpoint,"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
+        "application/vnd.ms-excel,"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+        "text/csv,text/plain,application/rtf,"
+        "application/vnd.oasis.opendocument.text,"
+        "application/vnd.oasis.opendocument.spreadsheet,"
+        "application/vnd.oasis.opendocument.presentation,"
+        "application/zip,image/png,image/jpeg,image/gif,image/webp"
+    ),
+)
 
 # ---------------------------------------------------------------------------
 # Default primary key field type
@@ -189,23 +300,77 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CORS
 # ---------------------------------------------------------------------------
 
-_cors_origins = os.environ.get(
-    "DJANGO_CORS_ALLOWED_ORIGINS",
-    (
-        "http://localhost:5173,"
-        "http://127.0.0.1:5173,"
-        "http://localhost:5174,"
-        "http://127.0.0.1:5174"
-    ),
+# In development fall back to the local React dev-server origins; in production
+# the actual frontend origin(s) must be supplied explicitly.
+_dev_origins = (
+    "http://localhost:5173,"
+    "http://127.0.0.1:5173,"
+    "http://localhost:5174,"
+    "http://127.0.0.1:5174"
 )
 
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in _cors_origins.split(",")
-    if origin.strip()
-]
+CORS_ALLOWED_ORIGINS = _env_list(
+    "DJANGO_CORS_ALLOWED_ORIGINS",
+    _dev_origins if DEBUG else "",
+)
 
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins are required for session-authenticated requests (e.g.
+# Django admin) made from a different origin. The JSON API itself is JWT-based
+# and does not use CSRF-protected cookies, but admin/staff POSTs still do.
+CSRF_TRUSTED_ORIGINS = _env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    _dev_origins if DEBUG else "",
+)
+
+# ---------------------------------------------------------------------------
+# Frontend base URL (used to build links emailed to users, e.g. password reset)
+# ---------------------------------------------------------------------------
+
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "").strip().rstrip("/")
+if not FRONTEND_BASE_URL:
+    if DEBUG:
+        FRONTEND_BASE_URL = "http://localhost:5173"
+    elif CORS_ALLOWED_ORIGINS:
+        FRONTEND_BASE_URL = CORS_ALLOWED_ORIGINS[0].rstrip("/")
+    else:
+        raise ImproperlyConfigured(
+            "FRONTEND_BASE_URL must be set to the deployed frontend origin."
+        )
+if not FRONTEND_BASE_URL.startswith(("http://", "https://")):
+    raise ImproperlyConfigured(
+        "FRONTEND_BASE_URL must be an absolute URL including the http(s) scheme."
+    )
+
+# ---------------------------------------------------------------------------
+# Production security (only enforced when DEBUG is off)
+# ---------------------------------------------------------------------------
+
+if not DEBUG:
+    # Redirect all plain HTTP requests to HTTPS.
+    SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
+
+    # Cookies are only sent over HTTPS.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HTTP Strict Transport Security: 1 year, subdomains included.
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = False
+
+    # Render (and similar PaaS) terminate TLS at their proxy and forward the
+    # original scheme in X-Forwarded-Proto. Only trust it when the platform
+    # actually does this (the default on Render); a host that terminates TLS
+    # itself should set DJANGO_TRUST_PROXY_SSL=false.
+    if _env_bool("DJANGO_TRUST_PROXY_SSL", True):
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    # Render's internal health-check probe hits the app over plain HTTP, so the
+    # health endpoint must not be redirected to HTTPS (otherwise the probe sees
+    # a 301 and the deploy is marked unhealthy).
+    SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]
 
 # ---------------------------------------------------------------------------
 # Django REST Framework
@@ -253,7 +418,56 @@ SIMPLE_JWT = {
 }
 
 # ---------------------------------------------------------------------------
-# Email — console backend for development
+# Payments
 # ---------------------------------------------------------------------------
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+PAYMENTS_DEMO_MODE = _env_bool("PAYMENTS_DEMO_MODE", DEBUG)
+if PAYMENTS_DEMO_MODE and not DEBUG:
+    raise ImproperlyConfigured(
+        "PAYMENTS_DEMO_MODE cannot be enabled while DEBUG is False. Paid "
+        "courses require a verified payment provider before launch."
+    )
+
+# ---------------------------------------------------------------------------
+# Email
+# ---------------------------------------------------------------------------
+
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "").strip()
+if not EMAIL_BACKEND:
+    EMAIL_BACKEND = (
+        "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    )
+
+if not DEBUG and "console" in EMAIL_BACKEND.lower():
+    raise ImproperlyConfigured(
+        "Production EMAIL_BACKEND must not be the console backend because it "
+        "writes password-reset tokens to logs."
+    )
+
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "").strip()
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "").strip()
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "noreply@smartlearn.local"
+).strip()
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ImproperlyConfigured(
+        "EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled."
+    )
+
+if (
+    not DEBUG
+    and EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend"
+    and not EMAIL_HOST
+):
+    raise ImproperlyConfigured(
+        "EMAIL_HOST must be set when using the SMTP email backend in production."
+    )

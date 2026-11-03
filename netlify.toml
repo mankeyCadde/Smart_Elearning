@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback for React Router. Existing static files (e.g. /assets/*,
+# /favicon.svg) are served first (shadowing), so only unknown paths fall back to
+# index.html. API requests go cross-origin to the Django backend via
+# VITE_API_URL, so they are never affected by this rule.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
